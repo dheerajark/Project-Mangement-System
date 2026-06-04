@@ -22,4 +22,9 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   lastName?: string;
+
+  @ApiProperty({ example: 'Acme Corp', description: 'The name of the new organization to create', required: false })
+  @IsString()
+  @IsOptional()
+  organizationName?: string;
 }

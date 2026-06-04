@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { RegisterDto } from '../types/auth.types'; // we will define types soon
-import { LoginDto } from '../types/auth.types';
+import { RegisterDto, LoginDto, AcceptInviteDto } from '../types/auth.types';
 
 export type UserPayload = {
   sub: string;
   email: string;
+  organizationId: string;
   firstName?: string;
   lastName?: string;
   roles: string[];
@@ -78,6 +78,20 @@ export function useAuth() {
     },
   });
 
+  const acceptInviteMutation = useMutation({
+    mutationFn: async (dto: AcceptInviteDto) => {
+      const response = await api.post('/auth/accept-invite', dto);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      const { access_token, refresh_token } = data;
+      localStorage.setItem('access_token', access_token);
+      localStorage.setItem('refresh_token', refresh_token);
+      const decoded = decodeJwt(access_token);
+      setUser(decoded);
+    },
+  });
+
   const logoutMutation = useMutation({
     mutationFn: async () => {
       try {
@@ -111,6 +125,9 @@ export function useAuth() {
     register: registerMutation.mutateAsync,
     isRegistering: registerMutation.isPending,
     registerError: registerMutation.error,
+    acceptInvite: acceptInviteMutation.mutateAsync,
+    isAcceptingInvite: acceptInviteMutation.isPending,
+    acceptInviteError: acceptInviteMutation.error,
     logout: logoutMutation.mutateAsync,
     hasRole,
     hasPermission,

@@ -10,19 +10,129 @@ datasource db {
   provider = "sqlite"
 }
 
+model Organization {
+  id          String                @id @default(uuid())
+  name        String
+  description String?
+  logoUrl     String?
+  isActive    Boolean               @default(true)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  deletedAt   DateTime?
+  settings    OrganizationSettings?
+  users       User[]
+  members     OrganizationMember[]
+  invitations Invitation[]
+  auditLogs   AuditLog[]
+  projects    Project[]
+  tasks       Task[]
+  taskLabels  TaskLabel[]
+  timeEntries TimeEntry[]
+  timesheets  Timesheet[]
+  milestones  Milestone[]
+  projectActivities ProjectActivity[]
+
+  @@map("organizations")
+}
+
+model OrganizationSettings {
+  id                  String       @id @default(uuid())
+  organizationId      String       @unique
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  theme               String       @default("dark")
+  allowedEmailDomains String?
+  timezone            String?
+  dateFormat          String?
+  language            String?
+  currency            String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@map("organization_settings")
+}
+
 model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
-  passwordHash String
-  firstName    String?
-  lastName     String?
-  hashedRt     String?    // hashed refresh token for session management
-  isActive     Boolean    @default(true)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  userRoles    UserRole[]
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  passwordHash        String
+  firstName           String?
+  lastName            String?
+  hashedRt            String?              // hashed refresh token for session management
+  isActive            Boolean              @default(true)
+  organizationId      String
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
+  userRoles           UserRole[]
+  organizationMembers OrganizationMember[]
+  auditLogs           AuditLog[]
+  invitations         Invitation[]         @relation("InvitedByRelation")
+  ownedProjects       Project[]            @relation("ProjectOwnerRelation")
+  projectMembers      ProjectMember[]
+  assignedTasks       Task[]               @relation("TaskAssignee")
+  reportedTasks       Task[]               @relation("TaskReporter")
+  taskComments        TaskComment[]
+  taskAttachments     TaskAttachment[]
+  taskWatchers        TaskWatcher[]
+  taskActivities      TaskActivity[]
+  timeEntries         TimeEntry[]
+  timesheets          Timesheet[]
+  approvedTimesheets  Timesheet[]          @relation("ApprovedTimesheets")
+  projectActivities   ProjectActivity[]
 
   @@map("users")
+}
+
+model OrganizationMember {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         String       @default("ACTIVE") // ACTIVE, SUSPENDED, INVITED
+  joinedAt       DateTime     @default(now())
+  deletedAt      DateTime?
+
+  @@unique([userId, organizationId])
+  @@map("organization_members")
+}
+
+model Invitation {
+  id             String       @id @default(uuid())
+  email          String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  roleId         String
+  role           Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  tokenHash      String       @unique
+  invitedBy      String
+  inviter        User         @relation("InvitedByRelation", fields: [invitedBy], references: [id], onDelete: Cascade)
+  status         String       @default("PENDING") // PENDING, ACCEPTED, EXPIRED, REVOKED
+  acceptedAt     DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  deletedAt      DateTime?
+
+  @@map("invitations")
+}
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entityType     String
+  entityId       String
+  action         String
+  oldValue       String?      // stringified JSON
+  newValue       String?      // stringified JSON
+  projectId      String?
+  taskId         String?
+  createdAt      DateTime     @default(now())
+
+  @@map("audit_logs")
 }
 
 model Role {
@@ -33,6 +143,7 @@ model Role {
   updatedAt       DateTime         @updatedAt
   userRoles       UserRole[]
   rolePermissions RolePermission[]
+  invitations     Invitation[]
 
   @@map("roles")
 }
@@ -66,4 +177,344 @@ model RolePermission {
 
   @@id([roleId, permissionId])
   @@map("role_permissions")
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProjectMemberRole {
+  OWNER
+  MANAGER
+  MEMBER
+}
+
+enum ProjectVisibility {
+  PRIVATE
+  ORGANIZATION
+}
+
+model Project {
+  id             String            @id @default(uuid())
+  name           String
+  description    String?
+  projectCode    String            @unique
+  startDate      DateTime?
+  endDate        DateTime?
+  status         ProjectStatus     @default(ACTIVE)
+  visibility     ProjectVisibility @default(PRIVATE)
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownerId        String
+  owner          User              @relation("ProjectOwnerRelation", fields: [ownerId], references: [id], onDelete: Cascade)
+  settings       ProjectSettings?
+  members        ProjectMember[]
+  nextTaskNumber Int               @default(1)
+  tasks          Task[]
+  timeEntries    TimeEntry[]
+  milestones     Milestone[]
+  activities     ProjectActivity[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
+
+  @@map("projects")
+}
+
+model ProjectSettings {
+  id                 String   @id @default(uuid())
+  projectId          String   @unique
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  allowTimeTracking  Boolean  @default(true)
+  allowIssueTracking Boolean  @default(true)
+  allowFileUploads   Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("project_settings")
+}
+
+model ProjectMember {
+  id        String            @id @default(uuid())
+  projectId String
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      ProjectMemberRole @default(MEMBER)
+  addedBy   String?
+  joinedAt  DateTime          @default(now())
+  deletedAt DateTime?
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+  BLOCKED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TaskType {
+  TASK
+  BUG
+  STORY
+  IMPROVEMENT
+}
+
+model Task {
+  id             String            @id @default(uuid())
+  title          String
+  description    String?
+  taskNumber     Int
+  status         TaskStatus        @default(TODO)
+  priority       TaskPriority      @default(MEDIUM)
+  type           TaskType          @default(TASK)
+  estimatedHours Float?
+  dueDate        DateTime?
+  position       Int               @default(0)
+  
+  projectId      String
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  assigneeId     String?
+  assignee       User?             @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  
+  reporterId     String?
+  reporter       User?             @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  
+  milestoneId    String?
+  milestone      Milestone?        @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
+  
+  comments       TaskComment[]
+  attachments    TaskAttachment[]
+  watchers       TaskWatcher[]
+  activities     TaskActivity[]
+  labels         TaskLabelMapping[]
+  timeEntries    TimeEntry[]
+
+  @@unique([projectId, taskNumber])
+  @@map("tasks")
+}
+
+model TaskLabel {
+  id             String            @id @default(uuid())
+  name           String
+  color          String
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tasks          TaskLabelMapping[]
+
+  @@unique([name, organizationId])
+  @@map("task_labels")
+}
+
+model TaskLabelMapping {
+  taskId  String
+  labelId String
+  task    Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label   TaskLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@map("task_label_mappings")
+}
+
+model TaskComment {
+  id             String       @id @default(uuid())
+  taskId         String
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content        String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  @@map("task_comments")
+}
+
+model TaskAttachment {
+  id             String       @id @default(uuid())
+  taskId         String
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fileName       String
+  fileUrl        String
+  fileSize       Int
+  uploadedById   String
+  uploadedBy     User         @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  organizationId String
+  createdAt      DateTime     @default(now())
+
+  @@map("task_attachments")
+}
+
+model TaskWatcher {
+  id        String   @id @default(uuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, userId])
+  @@map("task_watchers")
+}
+
+model TaskActivity {
+  id        String   @id @default(uuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  oldValue  String?
+  newValue  String?
+  createdAt DateTime @default(now())
+
+  @@map("task_activities")
+}
+
+enum TimesheetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum TimeEntrySource {
+  MANUAL
+  TIMER
+}
+
+model Timesheet {
+  id              String          @id @default(uuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId  String
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  startDate       DateTime
+  endDate         DateTime
+  status          TimesheetStatus @default(DRAFT)
+  approvalComment String?
+  
+  approvedById    String?
+  approvedBy      User?           @relation("ApprovedTimesheets", fields: [approvedById], references: [id], onDelete: SetNull)
+  
+  timeEntries     TimeEntry[]
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+
+  @@map("timesheets")
+}
+
+model TimeEntry {
+  id             String          @id @default(uuid())
+  hours          Float           @default(0)
+  loggedAt       DateTime
+  description    String?
+  billable       Boolean         @default(true)
+  source         TimeEntrySource
+  
+  // Timer properties
+  isTimerRunning Boolean         @default(false)
+  timerStartedAt DateTime?
+  
+  projectId      String
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  taskId         String?
+  task           Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  timesheetId    String?
+  timesheet      Timesheet?      @relation(fields: [timesheetId], references: [id], onDelete: SetNull)
+  
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+
+  @@map("time_entries")
+}
+
+enum MilestoneStatus {
+  PLANNED
+  IN_PROGRESS
+  ACHIEVED
+  MISSED
+}
+
+model Milestone {
+  id             String            @id @default(uuid())
+  title          String
+  description    String?
+  startDate      DateTime?
+  dueDate        DateTime?
+  status         MilestoneStatus   @default(PLANNED)
+  position       Int               @default(0)
+  
+  projectId      String
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  tasks          Task[]
+  projectActivities ProjectActivity[]
+  
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
+
+  @@unique([projectId, title])
+  @@map("milestones")
+}
+
+model ProjectActivity {
+  id             String       @id @default(uuid())
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  milestoneId    String?
+  milestone      Milestone?   @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  
+  action         String       // MILESTONE_CREATED, MILESTONE_UPDATED, MILESTONE_ARCHIVED
+  oldValue       String?      // stringified JSON
+  newValue       String?      // stringified JSON
+  createdAt      DateTime     @default(now())
+
+  @@map("project_activities")
 }

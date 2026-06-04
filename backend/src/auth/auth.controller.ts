@@ -2,6 +2,7 @@ import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { Tokens } from './types/tokens.type';
 import { Public } from './decorators/public.decorator';
 import { RefreshTokenGuard } from './guards/refreshToken.guard';
@@ -22,6 +23,16 @@ export class AuthController {
   @ApiResponse({ status: 403, description: 'User already exists.' })
   register(@Body() dto: RegisterDto): Promise<Tokens> {
     return this.authService.register(dto);
+  }
+
+  @Public()
+  @Post('accept-invite')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Accept an invitation and register' })
+  @ApiResponse({ status: 200, description: 'User successfully registered via invitation.' })
+  @ApiResponse({ status: 403, description: 'Invalid or expired invitation token.' })
+  acceptInvitation(@Body() dto: AcceptInviteDto): Promise<Tokens> {
+    return this.authService.acceptInvitation(dto);
   }
 
   @Public()

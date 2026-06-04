@@ -2,7 +2,9 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { AcceptInviteDto } from './dto/accept-invite.dto';
 import * as argon2 from 'argon2';
+import * as crypto from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { Tokens } from './types/tokens.type';
 import { JwtPayload } from './strategies/jwt.strategy';
@@ -25,40 +27,78 @@ export class AuthService {
 
     // 2. Hash the password
     const passwordHash = await argon2.hash(dto.password);
+    const orgName = dto.organizationName || (dto.firstName ? `${dto.firstName}'s Organization` : 'My Organization');
 
-    // 3. Create the user
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        passwordHash,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-      },
-    });
-
-    // 4. Assign default 'Member' role
-    const memberRole = await this.prisma.role.findUnique({
-      where: { name: 'Member' },
-    });
-    if (memberRole) {
-      await this.prisma.userRole.create({
+    // 3. Create organization, settings, user, organization member, and admin role mapping inside a transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
         data: {
-          userId: user.id,
-          roleId: memberRole.id,
+          name: orgName,
+          settings: {
+            create: {
+              theme: 'dark',
+              timezone: 'UTC',
+              dateFormat: 'YYYY-MM-DD',
+              language: 'en',
+              currency: 'USD',
+            },
+          },
         },
       });
-    }
 
-    // 5. Generate and return tokens
-    const tokens = await this.getTokens(user.id, user.email, user.firstName || undefined, user.lastName || undefined);
-    await this.updateHashedRt(user.id, tokens.refresh_token);
+      const user = await tx.user.create({
+        data: {
+          email: dto.email,
+          passwordHash,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          organizationId: org.id,
+        },
+      });
+
+      await tx.organizationMember.create({
+        data: {
+          organizationId: org.id,
+          userId: user.id,
+          status: 'ACTIVE',
+        },
+      });
+
+      const adminRole = await tx.role.findUnique({
+        where: { name: 'Admin' },
+      });
+      if (adminRole) {
+        await tx.userRole.create({
+          data: {
+            userId: user.id,
+            roleId: adminRole.id,
+          },
+        });
+      }
+
+      return user;
+    });
+
+    // 4. Generate and return tokens
+    const tokens = await this.getTokens(
+      result.id,
+      result.email,
+      result.organizationId,
+      result.firstName || undefined,
+      result.lastName || undefined,
+    );
+    await this.updateHashedRt(result.id, tokens.refresh_token);
     return tokens;
   }
 
   async login(dto: LoginDto): Promise<Tokens> {
-    // 1. Find user
-    const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+    // 1. Find user (must be active and not soft-deleted)
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email: dto.email,
+        deletedAt: null,
+        isActive: true,
+      },
     });
     if (!user) {
       throw new ForbiddenException('Access Denied');
@@ -71,7 +111,13 @@ export class AuthService {
     }
 
     // 3. Generate and return tokens
-    const tokens = await this.getTokens(user.id, user.email, user.firstName || undefined, user.lastName || undefined);
+    const tokens = await this.getTokens(
+      user.id,
+      user.email,
+      user.organizationId,
+      user.firstName || undefined,
+      user.lastName || undefined,
+    );
     await this.updateHashedRt(user.id, tokens.refresh_token);
     return tokens;
   }
@@ -92,8 +138,12 @@ export class AuthService {
   }
 
   async refreshTokens(userId: string, rt: string): Promise<Tokens> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+    const user = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        deletedAt: null,
+        isActive: true,
+      },
     });
     if (!user || !user.hashedRt) {
       throw new ForbiddenException('Access Denied');
@@ -104,8 +154,92 @@ export class AuthService {
       throw new ForbiddenException('Access Denied');
     }
 
-    const tokens = await this.getTokens(user.id, user.email, user.firstName || undefined, user.lastName || undefined);
+    const tokens = await this.getTokens(
+      user.id,
+      user.email,
+      user.organizationId,
+      user.firstName || undefined,
+      user.lastName || undefined,
+    );
     await this.updateHashedRt(user.id, tokens.refresh_token);
+    return tokens;
+  }
+
+  async acceptInvitation(dto: AcceptInviteDto): Promise<Tokens> {
+    // 1. Compute SHA-256 hash of the token
+    const tokenHash = crypto.createHash('sha256').update(dto.token).digest('hex');
+
+    // 2. Find valid, non-deleted pending invitation
+    const invitation = await this.prisma.invitation.findFirst({
+      where: {
+        tokenHash,
+        status: 'PENDING',
+        expiresAt: { gte: new Date() },
+        deletedAt: null,
+      },
+    });
+    if (!invitation) {
+      throw new ForbiddenException('Invalid or expired invitation token');
+    }
+
+    // 3. Check if email is already registered
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: invitation.email },
+    });
+    if (existingUser) {
+      throw new ForbiddenException('User with this email already exists');
+    }
+
+    // 4. Hash the password
+    const passwordHash = await argon2.hash(dto.password);
+
+    // 5. Create user and membership in a transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: invitation.email,
+          passwordHash,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          organizationId: invitation.organizationId,
+        },
+      });
+
+      await tx.organizationMember.create({
+        data: {
+          organizationId: invitation.organizationId,
+          userId: user.id,
+          status: 'ACTIVE',
+        },
+      });
+
+      await tx.userRole.create({
+        data: {
+          userId: user.id,
+          roleId: invitation.roleId,
+        },
+      });
+
+      await tx.invitation.update({
+        where: { id: invitation.id },
+        data: {
+          status: 'ACCEPTED',
+          acceptedAt: new Date(),
+        },
+      });
+
+      return user;
+    });
+
+    // 6. Generate and return tokens
+    const tokens = await this.getTokens(
+      result.id,
+      result.email,
+      result.organizationId,
+      result.firstName || undefined,
+      result.lastName || undefined,
+    );
+    await this.updateHashedRt(result.id, tokens.refresh_token);
     return tokens;
   }
 
@@ -119,7 +253,13 @@ export class AuthService {
     });
   }
 
-  async getTokens(userId: string, email: string, firstName?: string, lastName?: string): Promise<Tokens> {
+  async getTokens(
+    userId: string,
+    email: string,
+    organizationId: string,
+    firstName?: string,
+    lastName?: string,
+  ): Promise<Tokens> {
     // Fetch user's roles and permissions to embed them in the Access Token
     const userRoles = await this.prisma.userRole.findMany({
       where: { userId },
@@ -148,6 +288,7 @@ export class AuthService {
     const jwtPayload: JwtPayload = {
       sub: userId,
       email,
+      organizationId,
       firstName,
       lastName,
       roles,

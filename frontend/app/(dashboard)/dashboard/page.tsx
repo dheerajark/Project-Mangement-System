@@ -3,11 +3,47 @@
 import React, { useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { LogOut, Shield, ShieldCheck, User, Users, FolderKanban, Clock, AlertTriangle, Loader2 } from 'lucide-react';
+import { api } from '@/services/api';
+import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
+import { LogOut, Shield, ShieldCheck, User, Users, FolderKanban, Clock, AlertTriangle, Loader2, Settings } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const router = useRouter();
+
+  const { data: projects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const res = await api.get('/projects');
+      return res.data;
+    },
+    enabled: isAuthenticated,
+  });
+
+  const { data: assignedTasks } = useQuery({
+    queryKey: ['assignedTasks'],
+    queryFn: async () => {
+      const res = await api.get('/tasks/assigned');
+      return res.data;
+    },
+    enabled: isAuthenticated,
+  });
+
+  const { data: myTimeEntries } = useQuery({
+    queryKey: ['myTimeEntries'],
+    queryFn: async () => {
+      const res = await api.get('/time-entries/me');
+      return res.data;
+    },
+    enabled: isAuthenticated,
+  });
+
+  const activeProjectsCount = projects ? projects.filter((p: any) => p.status === 'ACTIVE').length : 0;
+  const assignedTasksCount = assignedTasks ? assignedTasks.length : 0;
+  const totalLoggedHours = myTimeEntries
+    ? myTimeEntries.reduce((sum: number, entry: any) => sum + entry.hours, 0)
+    : 0;
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -47,6 +83,16 @@ export default function DashboardPage() {
               <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs text-slate-300 font-medium">Session Active</span>
             </div>
+            {user && user.permissions.includes('MANAGE_USERS') && (
+              <Link
+                href="/settings"
+                className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all duration-150 flex items-center gap-2 text-sm"
+                title="Organization Settings"
+              >
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">Settings</span>
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-150 flex items-center gap-2 text-sm"
@@ -120,11 +166,14 @@ export default function DashboardPage() {
           {/* Quick Metrics Placeholders (MVP Modules Preview) */}
           <section className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Project Widget Card */}
-            <div className="bg-slate-900/30 border border-slate-900 hover:border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between group transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/[0.02]">
+            <Link
+              href="/projects"
+              className="bg-slate-900/30 border border-slate-900 hover:border-indigo-500/30 hover:bg-slate-900/40 rounded-2xl p-6 flex flex-col justify-between group transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/[0.02]"
+            >
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
-                  <h4 className="text-slate-400 text-sm font-semibold">Active Projects</h4>
-                  <p className="text-3xl font-extrabold text-slate-100 mt-1">0</p>
+                  <h4 className="text-slate-400 text-sm font-semibold group-hover:text-slate-350 transition-colors">Active Projects</h4>
+                  <p className="text-3xl font-extrabold text-slate-100 mt-1">{activeProjectsCount}</p>
                 </div>
                 <div className="p-3 bg-slate-950/80 border border-slate-800 text-indigo-400 rounded-xl group-hover:scale-110 transition-transform duration-200">
                   <FolderKanban className="w-5 h-5" />
@@ -132,16 +181,19 @@ export default function DashboardPage() {
               </div>
               <div className="mt-6 text-xs text-slate-500 border-t border-slate-900 pt-4 flex justify-between">
                 <span>Phase 3 Project Module</span>
-                <span className="text-indigo-400 font-medium">Coming Soon</span>
+                <span className="text-indigo-400 font-medium group-hover:underline">View Projects</span>
               </div>
-            </div>
+            </Link>
 
             {/* Tasks Widget Card */}
-            <div className="bg-slate-900/30 border border-slate-900 hover:border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between group transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/[0.02]">
+            <Link
+              href="/projects"
+              className="bg-slate-900/30 border border-slate-900 hover:border-slate-850 hover:bg-slate-900/50 rounded-2xl p-6 flex flex-col justify-between group transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/[0.02]"
+            >
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
-                  <h4 className="text-slate-400 text-sm font-semibold">My Tasks</h4>
-                  <p className="text-3xl font-extrabold text-slate-100 mt-1">0</p>
+                  <h4 className="text-slate-400 text-sm font-semibold group-hover:text-slate-350 transition-colors">My Tasks</h4>
+                  <p className="text-3xl font-extrabold text-slate-100 mt-1">{assignedTasksCount}</p>
                 </div>
                 <div className="p-3 bg-slate-950/80 border border-slate-800 text-blue-400 rounded-xl group-hover:scale-110 transition-transform duration-200">
                   <Users className="w-5 h-5" />
@@ -149,16 +201,19 @@ export default function DashboardPage() {
               </div>
               <div className="mt-6 text-xs text-slate-500 border-t border-slate-900 pt-4 flex justify-between">
                 <span>Phase 4 Task Management</span>
-                <span className="text-blue-400 font-medium">Coming Soon</span>
+                <span className="text-blue-400 font-medium group-hover:underline">View Projects</span>
               </div>
-            </div>
+            </Link>
 
             {/* Timesheets Widget Card */}
-            <div className="bg-slate-900/30 border border-slate-900 hover:border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between group transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/[0.02]">
+            <Link
+              href="/projects"
+              className="bg-slate-900/30 border border-slate-900 hover:border-indigo-500/30 hover:bg-slate-900/40 rounded-2xl p-6 flex flex-col justify-between group transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/[0.02]"
+            >
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
-                  <h4 className="text-slate-400 text-sm font-semibold">Time Logged</h4>
-                  <p className="text-3xl font-extrabold text-slate-100 mt-1">0.0 hrs</p>
+                  <h4 className="text-slate-400 text-sm font-semibold group-hover:text-slate-350 transition-colors">Time Logged</h4>
+                  <p className="text-3xl font-extrabold text-slate-100 mt-1">{totalLoggedHours.toFixed(1)} hrs</p>
                 </div>
                 <div className="p-3 bg-slate-950/80 border border-slate-800 text-emerald-400 rounded-xl group-hover:scale-110 transition-transform duration-200">
                   <Clock className="w-5 h-5" />
@@ -166,9 +221,9 @@ export default function DashboardPage() {
               </div>
               <div className="mt-6 text-xs text-slate-500 border-t border-slate-900 pt-4 flex justify-between">
                 <span>Phase 7 Time Tracking</span>
-                <span className="text-emerald-400 font-medium">Coming Soon</span>
+                <span className="text-emerald-400 font-medium group-hover:underline">View Time Logs</span>
               </div>
-            </div>
+            </Link>
 
             {/* Bugs/Issues Widget Card */}
             <div className="bg-slate-900/30 border border-slate-900 hover:border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between group transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/[0.02]">
