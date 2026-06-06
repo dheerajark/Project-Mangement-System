@@ -14,9 +14,6 @@ export class AuditService {
     oldValue?: any,
     newValue?: any,
   ) {
-    const oldValStr = oldValue ? JSON.stringify(oldValue) : null;
-    const newValStr = newValue ? JSON.stringify(newValue) : null;
-
     return this.prisma.auditLog.create({
       data: {
         organizationId,
@@ -24,8 +21,8 @@ export class AuditService {
         entityType,
         entityId,
         action,
-        oldValue: oldValStr,
-        newValue: newValStr,
+        oldValue: oldValue ?? null,
+        newValue: newValue ?? null,
       },
     });
   }

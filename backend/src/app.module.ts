@@ -10,6 +10,9 @@ import { ProjectModule } from './project/project.module';
 import { TaskModule } from './task/task.module';
 import { TimeTrackingModule } from './time-tracking/time-tracking.module';
 import { MilestoneModule } from './milestone/milestone.module';
+import { IssueModule } from './issue/issue.module';
+import { NotificationModule } from './notification/notification.module';
+import { ReportModule } from './report/report.module';
 import { APP_GUARD } from '@nestjs/core';
 import { AccessTokenGuard } from './auth/guards/accessToken.guard';
 
@@ -24,6 +27,9 @@ import { AccessTokenGuard } from './auth/guards/accessToken.guard';
     TaskModule,
     TimeTrackingModule,
     MilestoneModule,
+    IssueModule,
+    NotificationModule,
+    ReportModule,
   ],
   controllers: [AppController],
   providers: [

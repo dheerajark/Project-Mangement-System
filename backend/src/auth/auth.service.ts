@@ -76,6 +76,82 @@ export class AuthService {
         });
       }
 
+      // Create default profiles for the new organization
+      const allPermissions = await tx.permission.findMany();
+
+      const adminProfile = await tx.profile.create({
+        data: {
+          name: 'Admin Profile',
+          description: 'Full administrative access and permission management',
+          isSystem: true,
+          organizationId: org.id,
+        },
+      });
+
+      const pmProfile = await tx.profile.create({
+        data: {
+          name: 'Project Manager Profile',
+          description: 'Can manage projects, tasks, and teams',
+          isSystem: true,
+          organizationId: org.id,
+        },
+      });
+
+      const memberProfile = await tx.profile.create({
+        data: {
+          name: 'Member Profile',
+          description: 'Standard user access to work on assigned tasks',
+          isSystem: true,
+          organizationId: org.id,
+        },
+      });
+
+      // Map permissions to Admin Profile (all)
+      await tx.profilePermission.createMany({
+        data: allPermissions.map((p) => ({
+          profileId: adminProfile.id,
+          permissionId: p.id,
+        })),
+      });
+
+      // PM Profile permissions
+      const pmPermissionNames = [
+        'CREATE_PROJECT', 'VIEW_PROJECT', 'EDIT_PROJECT', 'CREATE_TASK', 'VIEW_TASK', 'EDIT_TASK', 'ARCHIVE_TASK',
+        'LOG_TIME_ENTRY', 'ARCHIVE_TIME_ENTRY', 'VIEW_TIME_ENTRY', 'SUBMIT_TIMESHEET', 'APPROVE_TIMESHEET',
+        'CREATE_MILESTONE', 'VIEW_MILESTONE', 'EDIT_MILESTONE', 'ARCHIVE_MILESTONE', 'CREATE_ISSUE', 'VIEW_ISSUE',
+        'EDIT_ISSUE', 'ARCHIVE_ISSUE', 'COMMENT_ISSUE', 'VIEW_REPORT'
+      ];
+      await tx.profilePermission.createMany({
+        data: allPermissions
+          .filter((p) => pmPermissionNames.includes(p.name))
+          .map((p) => ({
+            profileId: pmProfile.id,
+            permissionId: p.id,
+          })),
+      });
+
+      // Member Profile permissions
+      const memberPermissionNames = [
+        'VIEW_PROJECT', 'CREATE_TASK', 'VIEW_TASK', 'EDIT_TASK', 'LOG_TIME_ENTRY', 'ARCHIVE_TIME_ENTRY',
+        'VIEW_TIME_ENTRY', 'SUBMIT_TIMESHEET', 'VIEW_MILESTONE', 'VIEW_ISSUE', 'CREATE_ISSUE', 'COMMENT_ISSUE'
+      ];
+      await tx.profilePermission.createMany({
+        data: allPermissions
+          .filter((p) => memberPermissionNames.includes(p.name))
+          .map((p) => ({
+            profileId: memberProfile.id,
+            permissionId: p.id,
+          })),
+      });
+
+      // Assign Admin Profile to User
+      await tx.userProfile.create({
+        data: {
+          userId: user.id,
+          profileId: adminProfile.id,
+        },
+      });
+
       return user;
     });
 
@@ -220,6 +296,34 @@ export class AuthService {
         },
       });
 
+      // Assign the corresponding profile based on the role they accepted
+      const invitedRole = await tx.role.findUnique({
+        where: { id: invitation.roleId },
+      });
+      let targetProfileName = 'Member Profile';
+      if (invitedRole?.name === 'Admin') {
+        targetProfileName = 'Admin Profile';
+      } else if (invitedRole?.name === 'Project Manager') {
+        targetProfileName = 'Project Manager Profile';
+      }
+
+      const assignedProfile = await tx.profile.findFirst({
+        where: {
+          organizationId: invitation.organizationId,
+          name: targetProfileName,
+          deletedAt: null,
+        },
+      });
+
+      if (assignedProfile) {
+        await tx.userProfile.create({
+          data: {
+            userId: user.id,
+            profileId: assignedProfile.id,
+          },
+        });
+      }
+
       await tx.invitation.update({
         where: { id: invitation.id },
         data: {
@@ -260,13 +364,19 @@ export class AuthService {
     firstName?: string,
     lastName?: string,
   ): Promise<Tokens> {
-    // Fetch user's roles and permissions to embed them in the Access Token
+    // Fetch user's roles
     const userRoles = await this.prisma.userRole.findMany({
       where: { userId },
+      include: { role: true },
+    });
+
+    // Fetch user's profile and permissions to embed them in the Access Token
+    const userProfile = await this.prisma.userProfile.findUnique({
+      where: { userId },
       include: {
-        role: {
+        profile: {
           include: {
-            rolePermissions: {
+            profilePermissions: {
               include: {
                 permission: true,
               },
@@ -279,11 +389,12 @@ export class AuthService {
     const roles = Array.from(new Set(userRoles.map((ur) => ur.role.name)));
     const permissions = Array.from(
       new Set(
-        userRoles.flatMap((ur) =>
-          ur.role.rolePermissions.map((rp) => rp.permission.name),
-        ),
+        userProfile?.profile?.profilePermissions?.map((pp) => pp.permission.name) || [],
       ),
     );
+
+    const profileId = userProfile?.profileId || undefined;
+    const profileVersion = userProfile?.profile?.version || undefined;
 
     const jwtPayload: JwtPayload = {
       sub: userId,
@@ -293,6 +404,8 @@ export class AuthService {
       lastName,
       roles,
       permissions,
+      profileId,
+      profileVersion,
     };
 
     const [at, rt] = await Promise.all([

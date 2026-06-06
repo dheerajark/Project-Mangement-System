@@ -1,0 +1,162 @@
+Enterprise Project Management System
+(Zoho/OpenProject Inspired\
+Phase 0: Architecture & Planning
+Tech Stack:
+Frontend: Next.js, TypeScript, Tailwind CSS, shadcn/ui, React Query.
+Backend: NestJS, Prisma ORM, JWT Authentication, Swagger.
+Database: PostgreSQL.
+DevOps: Docker, GitHub.
+Goal: Define architecture, coding standards, folder structure, and roadmap.
+Phase 1: Foundation
+Database Tables: users, roles, permissions, role_permissions, user_roles.
+Features:
+- Registration
+- Login
+- Logout
+- Refresh Tokens
+- Role Based Access Control
+- Password Hashing (Argon2\
+- JWT Security
+- Input Validation
+- Rate Limiting
+Deliverables:
+- Secure Authentication
+- User and Role Management
+Phase 2: Organization Module
+Tables:
+- organizations
+- teams
+- team_members
+Features:
+- Multi-organization support
+- Team management
+- Add/remove team members
+Deliverables:
+- Organization hierarchy
+- Team management
+Phase 3: Project Module
+Tables:
+- projects
+- project_members
+Features:
+- Create projects
+- Manage project members
+- Project dashboard
+Fields:
+Name, Description, Start Date, End Date, Status, Owner
+Phase 4: Task Management
+Tables:
+- tasks
+- task_comments
+- task_labels
+- task_attachments
+Features:
+- Task CRUD
+- Assignee and Reporter
+- Priority and Status
+- Comments
+- Attachments
+Statuses:
+Todo, In Progress, Review, Done, Blocked
+Phase 5: Kanban Board
+Features:
+- Drag and Drop task management
+- Real-time updates
+Library:
+- dnd-kit
+Deliverables:
+- Interactive Kanban board
+Phase 6: Milestones
+Tables:
+- milestones
+Features:
+- Milestone tracking
+- Progress calculation
+- Project completion tracking
+Phase 7: Time Tracking
+Tables:
+- time_entries
+- timesheets
+Features:
+- Start/Stop timer
+- Manual time entry
+- Weekly and monthly timesheets
+Deliverables:
+- Time logs
+- Reporting
+Phase 8: Issue/Bug Tracking
+Tables:
+- issues
+- issue_comments
+Features:
+- Bug management
+- Severity and Priority
+- Assignment and resolution tracking
+Phase 9: Notifications
+Tables:
+- notifications
+Features:
+- Real-time notifications
+- Task assignment alerts
+- Comment notifications
+- Milestone notifications
+Technology:
+- Socket.IO
+Phase 10: Reports & Analytics
+Dashboard Widgets:
+- Open Tasks
+- Completed Tasks
+- Overdue Tasks
+- Hours Logged
+- Project Progress
+Library:
+- Recharts
+Phase 11: Audit Trail
+Tables:
+- audit_logs
+Features:
+- Track every important action
+- Activity feed
+- User accountability
+Phase 12: Production Readiness
+Security:
+- CSRF Protection
+- XSS Protection
+- CORS
+- Rate Limiting
+Infrastructure:
+- Docker Compose
+- PostgreSQL Backups
+- Logging
+Testing:
+- Unit Tests
+- Integration Tests
+Recommended MVP
+Build these modules first:
+1. Authentication
+2. Organization Management
+3. Projects
+4. Tasks
+5. Kanban Board
+6. Time Tracking
+These modules provide approximately 70% of the functionality found in Zoho Projects.
+Folder Structure
+project-management-system
+frontend/
+app/
+components/
+services/
+hooks/
+types/
+backend/
+src/
+auth/
+users/
+organizations/
+projects/
+tasks/
+timesheets/
+issues/
+notifications/
+reports/
+prisma/

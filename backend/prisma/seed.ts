@@ -53,6 +53,12 @@ async function main() {
     { name: 'VIEW_MILESTONE', description: 'Can view a project\'s milestones' },
     { name: 'EDIT_MILESTONE', description: 'Can edit a milestone' },
     { name: 'ARCHIVE_MILESTONE', description: 'Can archive milestones' },
+    { name: 'CREATE_ISSUE', description: 'Can create issues/bugs in a project' },
+    { name: 'VIEW_ISSUE', description: 'Can view issues/bugs' },
+    { name: 'EDIT_ISSUE', description: 'Can edit issues/bugs' },
+    { name: 'ARCHIVE_ISSUE', description: 'Can archive issues/bugs' },
+    { name: 'COMMENT_ISSUE', description: 'Can comment on issues/bugs' },
+    { name: 'VIEW_REPORT', description: 'Can view reports and analytics' },
   ];
 
   const permissions: Record<string, any> = {};
@@ -115,6 +121,11 @@ async function main() {
     'VIEW_MILESTONE',
     'EDIT_MILESTONE',
     'ARCHIVE_MILESTONE',
+    'CREATE_ISSUE',
+    'VIEW_ISSUE',
+    'EDIT_ISSUE',
+    'ARCHIVE_ISSUE',
+    'COMMENT_ISSUE',
   ];
   for (const name of pmPermissionNames) {
     await prisma.rolePermission.create({
@@ -136,6 +147,9 @@ async function main() {
     'VIEW_TIME_ENTRY',
     'SUBMIT_TIMESHEET',
     'VIEW_MILESTONE',
+    'VIEW_ISSUE',
+    'CREATE_ISSUE',
+    'COMMENT_ISSUE',
   ];
   for (const name of memberPermissionNames) {
     await prisma.rolePermission.create({
@@ -146,6 +160,131 @@ async function main() {
     });
   }
   console.log('Role permissions successfully mapped!');
+
+  // 5.1. Define Default Profiles and templates
+  console.log('Seeding profiles...');
+  const profilesData = [
+    { name: 'Admin Profile', description: 'Full administrative access and permission management', isSystem: true, organizationId: defaultOrg.id },
+    { name: 'Project Manager Profile', description: 'Can manage projects, tasks, and teams', isSystem: true, organizationId: defaultOrg.id },
+    { name: 'Member Profile', description: 'Standard user access to work on assigned tasks', isSystem: true, organizationId: defaultOrg.id },
+    // Templates (global)
+    { name: 'Auditor', description: 'Read-only access to projects, tasks, and reports', isSystem: true, organizationId: null },
+    { name: 'Client', description: 'Access to project summary, milestones, and reports', isSystem: true, organizationId: null },
+    { name: 'Stakeholder', description: 'Read-only access to project milestones and reports', isSystem: true, organizationId: null },
+  ];
+
+  const profiles: Record<string, any> = {};
+  for (const item of profilesData) {
+    let profile = await prisma.profile.findFirst({
+      where: {
+        name: item.name,
+        organizationId: item.organizationId,
+      },
+    });
+    if (profile) {
+      profile = await prisma.profile.update({
+        where: { id: profile.id },
+        data: {
+          description: item.description,
+          isSystem: item.isSystem,
+        },
+      });
+    } else {
+      profile = await prisma.profile.create({
+        data: {
+          name: item.name,
+          description: item.description,
+          isSystem: item.isSystem,
+          organizationId: item.organizationId,
+        },
+      });
+    }
+    profiles[item.name] = profile;
+  }
+  console.log(`Seeded ${Object.keys(profiles).length} profiles.`);
+
+  // Clear profile permissions before seeding
+  await prisma.profilePermission.deleteMany({});
+
+  // Map Permissions to Profiles
+  // Admin Profile gets all permissions
+  const allPermissions = Object.values(permissions);
+  for (const p of allPermissions) {
+    await prisma.profilePermission.create({
+      data: {
+        profileId: profiles['Admin Profile'].id,
+        permissionId: p.id,
+      },
+    });
+  }
+
+  // Project Manager Profile permissions
+  const pmProfilePerms = [
+    ...pmPermissionNames,
+    'VIEW_REPORT'
+  ];
+  for (const name of pmProfilePerms) {
+    if (permissions[name]) {
+      await prisma.profilePermission.create({
+        data: {
+          profileId: profiles['Project Manager Profile'].id,
+          permissionId: permissions[name].id,
+        },
+      });
+    }
+  }
+
+  // Member Profile permissions
+  for (const name of memberPermissionNames) {
+    if (permissions[name]) {
+      await prisma.profilePermission.create({
+        data: {
+          profileId: profiles['Member Profile'].id,
+          permissionId: permissions[name].id,
+        },
+      });
+    }
+  }
+
+  // Auditor Template permissions
+  const auditorPerms = ['VIEW_PROJECT', 'VIEW_TASK', 'VIEW_ISSUE', 'VIEW_REPORT'];
+  for (const name of auditorPerms) {
+    if (permissions[name]) {
+      await prisma.profilePermission.create({
+        data: {
+          profileId: profiles['Auditor'].id,
+          permissionId: permissions[name].id,
+        },
+      });
+    }
+  }
+
+  // Client Template permissions
+  const clientPerms = ['VIEW_PROJECT', 'VIEW_MILESTONE', 'VIEW_REPORT'];
+  for (const name of clientPerms) {
+    if (permissions[name]) {
+      await prisma.profilePermission.create({
+        data: {
+          profileId: profiles['Client'].id,
+          permissionId: permissions[name].id,
+        },
+      });
+    }
+  }
+
+  // Stakeholder Template permissions
+  const stakeholderPerms = ['VIEW_PROJECT', 'VIEW_MILESTONE', 'VIEW_REPORT'];
+  for (const name of stakeholderPerms) {
+    if (permissions[name]) {
+      await prisma.profilePermission.create({
+        data: {
+          profileId: profiles['Stakeholder'].id,
+          permissionId: permissions[name].id,
+        },
+      });
+    }
+  }
+  console.log('Profile permissions successfully mapped!');
 
   // 6. Create default Admin user
   const passwordHash = await argon2.hash('password123');
@@ -198,6 +337,17 @@ async function main() {
     },
   });
   console.log('Admin user successfully assigned to role and organization member.');
+
+  // 9. Assign Admin profile to user
+  await prisma.userProfile.upsert({
+    where: { userId: adminUser.id },
+    update: {},
+    create: {
+      userId: adminUser.id,
+      profileId: profiles['Admin Profile'].id,
+    },
+  });
+  console.log('Admin user successfully assigned to Admin Profile.');
 
   console.log('Seeding completed successfully.');
 }

@@ -5,10 +5,15 @@ import { StartTimerDto } from './dto/start-timer.dto';
 import { StopTimerDto } from './dto/stop-timer.dto';
 import { SubmitTimesheetDto } from './dto/submit-timesheet.dto';
 import { ApproveTimesheetDto } from './dto/approve-timesheet.dto';
+import { NotificationType } from '@prisma/client';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class TimeTrackingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationService: NotificationService,
+  ) {}
 
   async logManualTime(organizationId: string, userId: string, dto: LogManualTimeDto) {
     const project = await this.prisma.project.findFirst({
@@ -329,7 +334,7 @@ export class TimeTrackingService {
       throw new ForbiddenException('A timesheet is already submitted or approved for this period');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const timeEntries = await tx.timeEntry.findMany({
         where: {
           userId,
@@ -384,6 +389,53 @@ export class TimeTrackingService {
         include: { timeEntries: true },
       });
     });
+
+    const managers = await this.prisma.user.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        userRoles: {
+          some: {
+            role: {
+              name: { in: ['Admin', 'Project Manager'] },
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    const notifyUserIds = new Set(managers.map((m) => m.id));
+    notifyUserIds.delete(userId);
+
+    if (notifyUserIds.size > 0) {
+      const submitter = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true },
+      });
+      const submitterName = submitter ? `${submitter.firstName} ${submitter.lastName}`.trim() : 'A member';
+      const formattedStart = start.toISOString().split('T')[0];
+      const formattedEnd = end.toISOString().split('T')[0];
+
+      const notifications = Array.from(notifyUserIds).map((recipientId) => ({
+        type: NotificationType.TIMESHEET_SUBMITTED,
+        title: 'Timesheet Submitted',
+        message: `${submitterName} submitted a timesheet for period ${formattedStart} to ${formattedEnd}`,
+        userId: recipientId,
+        actionUrl: `/settings`,
+        triggeredById: userId,
+        organizationId,
+        metadata: {
+          startDate: formattedStart,
+          endDate: formattedEnd,
+          submitterName,
+        },
+      }));
+
+      await this.notificationService.createNotificationsBulk(notifications);
+    }
+
+    return result;
   }
 
   async approveTimesheet(organizationId: string, userId: string, timesheetId: string, dto: ApproveTimesheetDto) {
@@ -418,6 +470,28 @@ export class TimeTrackingService {
         newValue: JSON.stringify(updated),
       },
     });
+
+    if (timesheet.userId !== userId) {
+      const formattedStart = timesheet.startDate.toISOString().split('T')[0];
+      const formattedEnd = timesheet.endDate.toISOString().split('T')[0];
+      const isApproved = updated.status === 'APPROVED';
+
+      await this.notificationService.createNotification({
+        type: isApproved ? NotificationType.TIMESHEET_APPROVED : NotificationType.TIMESHEET_REJECTED,
+        title: isApproved ? 'Timesheet Approved' : 'Timesheet Rejected',
+        message: `Your timesheet for period ${formattedStart} to ${formattedEnd} has been ${updated.status.toLowerCase()}${updated.approvalComment ? `: "${updated.approvalComment}"` : ''}`,
+        userId: timesheet.userId,
+        actionUrl: `/settings`,
+        triggeredById: userId,
+        organizationId,
+        metadata: {
+          startDate: formattedStart,
+          endDate: formattedEnd,
+          status: updated.status,
+          approvalComment: updated.approvalComment,
+        },
+      });
+    }
 
     return updated;
   }

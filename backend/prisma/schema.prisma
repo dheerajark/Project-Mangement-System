@@ -27,10 +27,14 @@ model Organization {
   projects    Project[]
   tasks       Task[]
   taskLabels  TaskLabel[]
-  timeEntries TimeEntry[]
+  timeEntries    TimeEntry[]
   timesheets  Timesheet[]
   milestones  Milestone[]
   projectActivities ProjectActivity[]
+  issues        Issue[]
+  issueComments IssueComment[]
+  notifications Notification[]
+  profiles      Profile[]
 
   @@map("organizations")
 }
@@ -65,6 +69,7 @@ model User {
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?
   userRoles           UserRole[]
+  userProfile         UserProfile?
   organizationMembers OrganizationMember[]
   auditLogs           AuditLog[]
   invitations         Invitation[]         @relation("InvitedByRelation")
@@ -80,6 +85,13 @@ model User {
   timesheets          Timesheet[]
   approvedTimesheets  Timesheet[]          @relation("ApprovedTimesheets")
   projectActivities   ProjectActivity[]
+  assignedIssues      Issue[]              @relation("IssueAssignee")
+  reportedIssues      Issue[]              @relation("IssueReporter")
+  issueComments       IssueComment[]
+  issueActivities     IssueActivity[]
+  notifications          Notification[]          @relation("UserNotifications")
+  triggeredNotifications Notification[]          @relation("NotificationTriggeredBy")
+  notificationPreference NotificationPreference?
 
   @@map("users")
 }
@@ -126,8 +138,8 @@ model AuditLog {
   entityType     String
   entityId       String
   action         String
-  oldValue       String?      // stringified JSON
-  newValue       String?      // stringified JSON
+  oldValue       Json?
+  newValue       Json?
   projectId      String?
   taskId         String?
   createdAt      DateTime     @default(now())
@@ -149,12 +161,13 @@ model Role {
 }
 
 model Permission {
-  id              String           @id @default(uuid())
-  name            String           @unique
-  description     String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  rolePermissions RolePermission[]
+  id                 String              @id @default(uuid())
+  name               String              @unique
+  description        String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  rolePermissions    RolePermission[]
+  profilePermissions ProfilePermission[]
 
   @@map("permissions")
 }
@@ -177,6 +190,44 @@ model RolePermission {
 
   @@id([roleId, permissionId])
   @@map("role_permissions")
+}
+
+model Profile {
+  id                 String              @id @default(uuid())
+  name               String
+  description        String?
+  isSystem           Boolean             @default(false)
+  version            Int                 @default(1)
+  organizationId     String?             // Null for default global templates, or specific to an org
+  organization       Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?           // Nullable for Soft-Archiving
+  profilePermissions ProfilePermission[]
+  userProfiles       UserProfile[]
+
+  @@unique([name, organizationId])
+  @@map("profiles")
+}
+
+model ProfilePermission {
+  profileId    String
+  permissionId String
+  profile      Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, permissionId])
+  @@map("profile_permissions")
+}
+
+model UserProfile {
+  userId    String   @unique
+  profileId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([userId, profileId])
+  @@map("user_profiles")
 }
 
 enum ProjectStatus {
@@ -212,14 +263,17 @@ model Project {
   owner          User              @relation("ProjectOwnerRelation", fields: [ownerId], references: [id], onDelete: Cascade)
   settings       ProjectSettings?
   members        ProjectMember[]
-  nextTaskNumber Int               @default(1)
-  tasks          Task[]
-  timeEntries    TimeEntry[]
-  milestones     Milestone[]
-  activities     ProjectActivity[]
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  deletedAt      DateTime?
+  nextTaskNumber  Int               @default(1)
+  nextIssueNumber Int               @default(1)
+  tasks           Task[]
+  timeEntries     TimeEntry[]
+  milestones      Milestone[]
+  activities      ProjectActivity[]
+  issues          Issue[]
+  notifications   Notification[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
 
   @@map("projects")
 }
@@ -311,6 +365,8 @@ model Task {
   activities     TaskActivity[]
   labels         TaskLabelMapping[]
   timeEntries    TimeEntry[]
+  issues         Issue[]
+  notifications  Notification[]
 
   @@unique([projectId, taskNumber])
   @@map("tasks")
@@ -517,4 +573,186 @@ model ProjectActivity {
   createdAt      DateTime     @default(now())
 
   @@map("project_activities")
+}
+
+// ─── Phase 8: Issue / Bug Tracking ───────────────────────────────────────────
+
+enum IssueStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+enum IssuePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IssueType {
+  BUG
+  FEATURE_REQUEST
+  IMPROVEMENT
+  SUPPORT
+}
+
+model Issue {
+  id          String        @id @default(uuid())
+  title       String
+  description String?
+  issueNumber Int
+  type        IssueType     @default(BUG)
+  status      IssueStatus   @default(OPEN)
+  priority    IssuePriority @default(MEDIUM)
+  severity    IssueSeverity @default(MEDIUM)
+
+  environment      String?
+  reproductionSteps String?
+  resolutionNotes  String?
+
+  resolvedAt  DateTime?
+
+  projectId      String
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  assigneeId  String?
+  assignee    User?         @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  reporterId  String?
+  reporter    User?         @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  taskId      String?
+  task        Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  comments    IssueComment[]
+  activities  IssueActivity[]
+  notifications Notification[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  @@unique([projectId, issueNumber])
+  @@map("issues")
+}
+
+model IssueComment {
+  id             String       @id @default(uuid())
+  issueId        String
+  issue          Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content        String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  @@map("issue_comments")
+}
+
+model IssueActivity {
+  id        String   @id @default(uuid())
+  issueId   String
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  oldValue  String?
+  newValue  String?
+  createdAt DateTime @default(now())
+
+  @@map("issue_activities")
+}
+
+// ─── Phase 9: Notifications ──────────────────────────────────────────────────
+
+enum NotificationType {
+  TASK_ASSIGNMENT
+  TASK_COMMENT
+  ISSUE_ASSIGNMENT
+  ISSUE_COMMENT
+  ISSUE_RESOLVED
+  MILESTONE_UPDATE
+  TIMESHEET_SUBMITTED
+  TIMESHEET_APPROVED
+  TIMESHEET_REJECTED
+  SYSTEM
+}
+
+model Notification {
+  id             String           @id @default(uuid())
+  type           NotificationType
+  title          String
+  message        String
+  isRead         Boolean          @default(false)
+  readAt         DateTime?
+  actionUrl      String?
+  metadata       String?          // SQLite does not support native Json. Stored as stringified JSON.
+  
+  // Recipient of the notification
+  userId         String
+  user           User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Trigger Source (who caused the notification)
+  triggeredById  String?
+  triggeredBy    User?            @relation("NotificationTriggeredBy", fields: [triggeredById], references: [id], onDelete: SetNull)
+  
+  // Optional Entity Associations for deep-linking
+  projectId      String?
+  project        Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  taskId         String?
+  task           Task?            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  issueId        String?
+  issue          Issue?           @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id                 String   @id @default(uuid())
+  
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  taskAssignment     Boolean  @default(true)
+  taskComment        Boolean  @default(true)
+  
+  issueAssignment    Boolean  @default(true)
+  issueComment       Boolean  @default(true)
+  
+  milestoneUpdate    Boolean  @default(true)
+  
+  timesheetSubmitted Boolean  @default(true)
+  timesheetApproved  Boolean  @default(true)
+  timesheetRejected  Boolean  @default(true)
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("notification_preferences")
 }

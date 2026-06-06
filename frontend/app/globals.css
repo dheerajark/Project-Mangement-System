@@ -1,29 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  --background: #020617; /* Slate 950 */
-  --foreground: #f8fafc; /* Slate 50 */
-  --card: #0f172a; /* Slate 900 */
-  --card-foreground: #f8fafc;
-  --primary: #6366f1; /* Indigo 500 */
+  --background: #0e0f11; /* Deep charcoal background */
+  --foreground: #f4f4f5; /* Off-white text */
+  --card: #1a1c20; /* Dark charcoal card background */
+  --card-foreground: #f4f4f5;
+  --primary: #10b981; /* Emerald Green 500 accent */
   --primary-foreground: #ffffff;
-  --secondary: #3b82f6; /* Blue 500 */
-  --muted: #475569; /* Slate 600 */
-  --muted-foreground: #94a3b8; /* Slate 400 */
-  --border: #1e293b; /* Slate 800 */
+  --secondary: #34d399; /* Emerald Green 400 */
+  --muted: #282b30; /* Muted surface background */
+  --muted-foreground: #9ca3af; /* Gray text secondary */
+  --border: #282b30; /* Muted border */
 }
 
 .light {
-  --background: #f8fafc; /* Slate 50 */
-  --foreground: #020617; /* Slate 950 */
-  --card: #ffffff;
-  --card-foreground: #020617;
-  --primary: #4f46e5;
+  --background: #f3f4f6; /* Cool Gray 100 background */
+  --foreground: #111827; /* Dark Gray primary text */
+  --card: #ffffff; /* White card surface */
+  --card-foreground: #111827;
+  --primary: #059669; /* Emerald Green 600 accent */
   --primary-foreground: #ffffff;
-  --secondary: #2563eb;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --border: #e2e8f0;
+  --secondary: #10b981; /* Emerald Green 500 */
+  --muted: #e5e7eb; /* Cool Gray 200 muted */
+  --muted-foreground: #4b5563; /* Cool Gray 600 secondary text */
+  --border: #d1d5db; /* Cool Gray 300 border */
 }
 
 @theme inline {

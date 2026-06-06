@@ -7,13 +7,15 @@ import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { CreateAttachmentMetadataDto } from './dto/create-attachment-metadata.dto';
 import { ReorderTaskDto } from './dto/reorder-task.dto';
-import { TaskStatus, TaskPriority, TaskType } from '@prisma/client';
+import { TaskStatus, TaskPriority, TaskType, NotificationType } from '@prisma/client';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class TaskService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
+    private notificationService: NotificationService,
   ) {}
 
   async autoTransitionMilestone(tx: any, milestoneId: string, taskStatus: TaskStatus, userId: string, organizationId: string) {
@@ -98,7 +100,7 @@ export class TaskService {
     }
 
     // 3. Sequential generation and creation inside single transaction
-    return this.prisma.$transaction(async (tx) => {
+    const task = await this.prisma.$transaction(async (tx) => {
       const proj = await tx.project.findUnique({
         where: { id: dto.projectId },
       });
@@ -176,6 +178,26 @@ export class TaskService {
 
       return task;
     });
+
+    if (task.assigneeId && task.assigneeId !== userId) {
+      await this.notificationService.createNotification({
+        type: NotificationType.TASK_ASSIGNMENT,
+        title: 'New Task Assigned',
+        message: `You have been assigned task [${project.projectCode}-${task.taskNumber}]: ${task.title}`,
+        userId: task.assigneeId,
+        actionUrl: `/projects/${task.projectId}/tasks/${task.id}`,
+        triggeredById: userId,
+        projectId: task.projectId,
+        taskId: task.id,
+        organizationId,
+        metadata: {
+          projectCode: project.projectCode,
+          taskNumber: task.taskNumber,
+        },
+      });
+    }
+
+    return task;
   }
 
   async getTasksForProject(organizationId: string, userId: string, projectId: string) {
@@ -430,6 +452,24 @@ export class TaskService {
       },
     });
 
+    if (dto.assigneeId && dto.assigneeId !== task.assigneeId && dto.assigneeId !== userId) {
+      await this.notificationService.createNotification({
+        type: NotificationType.TASK_ASSIGNMENT,
+        title: 'New Task Assigned',
+        message: `You have been assigned task [${task.project.projectCode}-${task.taskNumber}]: ${updatedTask.title}`,
+        userId: dto.assigneeId,
+        actionUrl: `/projects/${task.projectId}/tasks/${task.id}`,
+        triggeredById: userId,
+        projectId: task.projectId,
+        taskId: task.id,
+        organizationId,
+        metadata: {
+          projectCode: task.project.projectCode,
+          taskNumber: task.taskNumber,
+        },
+      });
+    }
+
     return updatedTask;
   }
 
@@ -571,6 +611,48 @@ export class TaskService {
         newValue: JSON.stringify(comment),
       },
     });
+
+    const notifyUserIds = new Set<string>();
+    if (task.assigneeId && task.assigneeId !== userId) {
+      notifyUserIds.add(task.assigneeId);
+    }
+    if (task.reporterId && task.reporterId !== userId) {
+      notifyUserIds.add(task.reporterId);
+    }
+    if (task.watchers) {
+      for (const watcher of task.watchers) {
+        if (watcher.userId !== userId) {
+          notifyUserIds.add(watcher.userId);
+        }
+      }
+    }
+
+    if (notifyUserIds.size > 0) {
+      const commenter = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true },
+      });
+      const commenterName = commenter ? `${commenter.firstName} ${commenter.lastName}`.trim() : 'Someone';
+      const cleanContent = comment.content.length > 50 ? `${comment.content.substring(0, 50)}...` : comment.content;
+
+      const notifications = Array.from(notifyUserIds).map((recipientId) => ({
+        type: NotificationType.TASK_COMMENT,
+        title: 'New Comment on Task',
+        message: `${commenterName} commented on task [${task.project.projectCode}-${task.taskNumber}]: "${cleanContent}"`,
+        userId: recipientId,
+        actionUrl: `/projects/${task.projectId}/tasks/${task.id}`,
+        triggeredById: userId,
+        projectId: task.projectId,
+        taskId: task.id,
+        organizationId,
+        metadata: {
+          projectCode: task.project.projectCode,
+          taskNumber: task.taskNumber,
+        },
+      }));
+
+      await this.notificationService.createNotificationsBulk(notifications);
+    }
 
     return comment;
   }

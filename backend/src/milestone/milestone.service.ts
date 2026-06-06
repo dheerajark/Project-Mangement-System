@@ -2,10 +2,15 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
+import { NotificationType } from '@prisma/client';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class MilestoneService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationService: NotificationService,
+  ) {}
 
   async verifyProjectAccess(projectId: string, organizationId: string, userId: string) {
     const project = await this.prisma.project.findFirst({
@@ -171,8 +176,8 @@ export class MilestoneService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const updatedMilestone = await tx.milestone.update({
+    const updatedMilestone = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.milestone.update({
         where: { id: milestoneId },
         data: {
           title: dto.title,
@@ -187,13 +192,13 @@ export class MilestoneService {
       // Write ProjectActivity log
       await tx.projectActivity.create({
         data: {
-          projectId: oldMilestone.projectId,
+          projectId: oldMilestone!.projectId,
           userId,
           organizationId,
           milestoneId,
           action: 'MILESTONE_UPDATED',
           oldValue: JSON.stringify(oldMilestone),
-          newValue: JSON.stringify(updatedMilestone)
+          newValue: JSON.stringify(updated)
         }
       });
 
@@ -206,12 +211,55 @@ export class MilestoneService {
           entityId: milestoneId,
           action: 'MILESTONE_UPDATED',
           oldValue: JSON.stringify(oldMilestone),
-          newValue: JSON.stringify(updatedMilestone)
+          newValue: JSON.stringify(updated)
         }
       });
 
-      return updatedMilestone;
+      return updated;
     });
+
+    if (dto.status && dto.status !== oldMilestone!.status && (dto.status === 'ACHIEVED' || dto.status === 'MISSED')) {
+      const projectWithManagers = await this.prisma.project.findUnique({
+        where: { id: oldMilestone!.projectId },
+        include: {
+          members: {
+            where: {
+              role: { in: ['OWNER', 'MANAGER'] },
+              deletedAt: null,
+            },
+            select: { userId: true },
+          },
+        },
+      });
+
+      const notifyUserIds = new Set<string>();
+      if (projectWithManagers) {
+        notifyUserIds.add(projectWithManagers.ownerId);
+        projectWithManagers.members.forEach((m) => notifyUserIds.add(m.userId));
+      }
+      notifyUserIds.delete(userId);
+
+      if (notifyUserIds.size > 0) {
+        const notifications = Array.from(notifyUserIds).map((recipientId) => ({
+          type: NotificationType.MILESTONE_UPDATE,
+          title: 'Milestone Status Updated',
+          message: `Milestone [${updatedMilestone.title}] in project [${projectWithManagers?.projectCode || 'PROJ'}] was marked as ${updatedMilestone.status.toLowerCase()}`,
+          userId: recipientId,
+          actionUrl: `/projects/${oldMilestone!.projectId}/milestones/${updatedMilestone.id}`,
+          triggeredById: userId,
+          projectId: oldMilestone!.projectId,
+          organizationId,
+          metadata: {
+            projectCode: projectWithManagers?.projectCode,
+            milestoneTitle: updatedMilestone.title,
+          },
+        }));
+
+        await this.notificationService.createNotificationsBulk(notifications);
+      }
+    }
+
+    return updatedMilestone;
   }
 
   async archiveMilestone(organizationId: string, userId: string, milestoneId: string) {

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/services/api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -32,12 +32,16 @@ import {
   Sparkles,
   Filter,
   X,
+  Sliders,
 } from 'lucide-react';
 import Link from 'next/link';
 import TaskDetailDrawer from '@/components/task-detail-drawer';
 import KanbanBoard from '@/components/kanban-board';
 import TimeLogsTab from '@/components/time-logs-tab';
 import MilestonesTab from '@/components/milestones-tab';
+import IssuesTab from '@/components/issues-tab';
+import NotificationBell from '@/components/notification-bell';
+import ReportsTab from '@/components/reports-tab';
 
 export default function ProjectDetailsPage() {
   const { user, isAuthenticated, isLoading, hasPermission } = useAuth();
@@ -45,9 +49,10 @@ export default function ProjectDetailsPage() {
   const params = useParams();
   const projectId = params.id as string;
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
 
   // Navigation Tabs State
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'members' | 'timeLogs' | 'milestones'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'members' | 'timeLogs' | 'milestones' | 'issues' | 'reports'>('overview');
 
   // Component UI State (Project Info)
   const [isEditingInfo, setIsEditingInfo] = useState(false);
@@ -93,6 +98,29 @@ export default function ProjectDetailsPage() {
       router.push('/login');
     }
   }, [isLoading, isAuthenticated, router]);
+
+  // Handle URL deep-linking query parameters (e.g. ?tab=tasks&taskId=...)
+  useEffect(() => {
+    if (!searchParams) return;
+    const tab = searchParams.get('tab');
+    const taskId = searchParams.get('taskId');
+    const issueId = searchParams.get('issueId');
+
+    if (tab) {
+      if (['overview', 'tasks', 'members', 'timeLogs', 'milestones', 'issues', 'reports'].includes(tab)) {
+        setActiveTab(tab as any);
+      }
+    } else if (taskId) {
+      setActiveTab('tasks');
+    } else if (issueId) {
+      setActiveTab('issues');
+    }
+
+    if (taskId) {
+      setSelectedTaskId(taskId);
+      setIsTaskDrawerOpen(true);
+    }
+  }, [searchParams]);
 
   // Fetch Project Details Query
   const { data: project, isLoading: isLoadingProject, error: projectLoadError } = useQuery({
@@ -523,8 +551,16 @@ export default function ProjectDetailsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
-            <div className="hidden sm:flex flex-col items-end gap-1">
+          <div className="flex items-center gap-4 sm:gap-6">
+            <NotificationBell />
+            <Link
+              href="/settings/notifications"
+              className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all duration-150 flex items-center justify-center"
+              title="Notification Preferences"
+            >
+              <Sliders className="w-4 h-4" />
+            </Link>
+            <div className="hidden md:flex flex-col items-end gap-1">
               <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                 Project Progress
                 <span className="font-mono text-indigo-400">{project.progress ?? 0}%</span>
@@ -618,6 +654,20 @@ export default function ProjectDetailsPage() {
             )}
           </button>
 
+          {project.settings?.allowIssueTracking !== false && (
+            <button
+              onClick={() => setActiveTab('issues')}
+              className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
+                activeTab === 'issues' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Issues
+              {activeTab === 'issues' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+              )}
+            </button>
+          )}
+
           {project.settings?.allowTimeTracking && (
             <button
               onClick={() => setActiveTab('timeLogs')}
@@ -631,6 +681,18 @@ export default function ProjectDetailsPage() {
               )}
             </button>
           )}
+
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
+              activeTab === 'reports' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Reports
+            {activeTab === 'reports' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+            )}
+          </button>
         </div>
 
         {/* Tab contents */}
@@ -1303,8 +1365,20 @@ export default function ProjectDetailsPage() {
           <MilestonesTab projectId={projectId} />
         )}
 
+        {activeTab === 'issues' && (
+          <IssuesTab
+            projectId={projectId}
+            projectMembers={project.members || []}
+            projectTasks={tasks || []}
+          />
+        )}
+
         {activeTab === 'timeLogs' && project.settings?.allowTimeTracking && (
           <TimeLogsTab projectId={projectId} />
+        )}
+
+        {activeTab === 'reports' && (
+          <ReportsTab projectId={projectId} />
         )}
 
       </main>

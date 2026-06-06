@@ -10,6 +10,8 @@ export type JwtPayload = {
   lastName?: string;
   roles: string[];
   permissions: string[];
+  profileId?: string;
+  profileVersion?: number;
 };
 
 @Injectable()

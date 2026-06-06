@@ -1,0 +1,269 @@
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 78 719.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 26 Tm /F2 18 Tf 22 TL 50.0868 0 Td (Enterprise Project Management System) Tj T* -47.988 0 Td (\(Zoho/OpenProject Inspired\) - Implementation Plan) Tj T* -2.098795 0 Td ET
+Q
+Q
+q
+1 0 0 1 78 701.8898 cm
+Q
+q
+1 0 0 1 78 679.8898 cm
+q
+BT 1 0 0 1 0 4 Tm 22 TL /F2 18 Tf 0 0 0 rg (Phase 0: Architecture & Planning) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 577.8898 cm
+q
+BT 1 0 0 1 0 86 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Tech Stack:) Tj  T* (Frontend: Next.js, TypeScript, Tailwind CSS, shadcn/ui, React Query.) Tj  T* (Backend: NestJS, Prisma ORM, JWT Authentication, Swagger.) Tj  T* (Database: PostgreSQL.) Tj  T* (DevOps: Docker, GitHub.) Tj  T*  T* (Goal: Define architecture, coding standards, folder structure, and roadmap.) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 569.8898 cm
+Q
+q
+1 0 0 1 78 547.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Phase 1: Foundation) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 337.8898 cm
+q
+BT 1 0 0 1 0 194 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Database Tables: users, roles, permissions, role_permissions, user_roles.) Tj  T*  T* (Features:) Tj  T* (- Registration) Tj  T* (- Login) Tj  T* (- Logout) Tj  T* (- Refresh Tokens) Tj  T* (- Role Based Access Control) Tj  T* (- Password Hashing \(Argon2\)) Tj  T* (- JWT Security) Tj  T* (- Input Validation) Tj  T* (- Rate Limiting) Tj  T*  T* (Deliverables:) Tj  T* (- Secure Authentication) Tj  T* (- User and Role Management) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 329.8898 cm
+Q
+q
+1 0 0 1 78 307.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Phase 2: Organization Module) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 133.8898 cm
+q
+BT 1 0 0 1 0 158 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Tables:) Tj  T* (- organizations) Tj  T* (- teams) Tj  T* (- team_members) Tj  T*  T* (Features:) Tj  T* (- Multi-organization support) Tj  T* (- Team management) Tj  T* (- Add/remove team members) Tj  T*  T* (Deliverables:) Tj  T* (- Organization hierarchy) Tj  T* (- Team management) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 125.8898 cm
+Q
+q
+1 0 0 1 78 103.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Phase 3: Project Module) Tj T* ET
+Q
+Q
+ 
+
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 78 619.8898 cm
+q
+BT 1 0 0 1 0 134 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Tables:) Tj  T* (- projects) Tj  T* (- project_members) Tj  T*  T* (Features:) Tj  T* (- Create projects) Tj  T* (- Manage project members) Tj  T* (- Project dashboard) Tj  T*  T* (Fields:) Tj  T* (Name, Description, Start Date, End Date, Status, Owner) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 611.8898 cm
+Q
+q
+1 0 0 1 78 589.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Phase 4: Task Management) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 391.8898 cm
+q
+BT 1 0 0 1 0 182 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Tables:) Tj  T* (- tasks) Tj  T* (- task_comments) Tj  T* (- task_labels) Tj  T* (- task_attachments) Tj  T*  T* (Features:) Tj  T* (- Task CRUD) Tj  T* (- Assignee and Reporter) Tj  T* (- Priority and Status) Tj  T* (- Comments) Tj  T* (- Attachments) Tj  T*  T* (Statuses:) Tj  T* (Todo, In Progress, Review, Done, Blocked) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 383.8898 cm
+Q
+q
+1 0 0 1 78 361.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Phase 5: Kanban Board) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 235.8898 cm
+q
+BT 1 0 0 1 0 110 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Features:) Tj  T* (- Drag and Drop task management) Tj  T* (- Real-time updates) Tj  T*  T* (Library:) Tj  T* (- dnd-kit) Tj  T*  T* (Deliverables:) Tj  T* (- Interactive Kanban board) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 227.8898 cm
+Q
+q
+1 0 0 1 78 205.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Phase 6: Milestones) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 103.8898 cm
+q
+BT 1 0 0 1 0 86 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Tables:) Tj  T* (- milestones) Tj  T*  T* (Features:) Tj  T* (- Milestone tracking) Tj  T* (- Progress calculation) Tj  T* (- Project completion tracking) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 95.88976 cm
+Q
+ 
+
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 78 741.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Phase 7: Time Tracking) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 579.8898 cm
+q
+BT 1 0 0 1 0 146 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Tables:) Tj  T* (- time_entries) Tj  T* (- timesheets) Tj  T*  T* (Features:) Tj  T* (- Start/Stop timer) Tj  T* (- Manual time entry) Tj  T* (- Weekly and monthly timesheets) Tj  T*  T* (Deliverables:) Tj  T* (- Time logs) Tj  T* (- Reporting) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 571.8898 cm
+Q
+q
+1 0 0 1 78 549.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Phase 8: Issue/Bug Tracking) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 435.8898 cm
+q
+BT 1 0 0 1 0 98 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Tables:) Tj  T* (- issues) Tj  T* (- issue_comments) Tj  T*  T* (Features:) Tj  T* (- Bug management) Tj  T* (- Severity and Priority) Tj  T* (- Assignment and resolution tracking) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 427.8898 cm
+Q
+q
+1 0 0 1 78 405.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Phase 9: Notifications) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 255.8898 cm
+q
+BT 1 0 0 1 0 134 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Tables:) Tj  T* (- notifications) Tj  T*  T* (Features:) Tj  T* (- Real-time notifications) Tj  T* (- Task assignment alerts) Tj  T* (- Comment notifications) Tj  T* (- Milestone notifications) Tj  T*  T* (Technology:) Tj  T* (- Socket.IO) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 247.8898 cm
+Q
+q
+1 0 0 1 78 225.8898 cm
+q
+BT 1 0 0 1 0 4 Tm 22 TL /F2 18 Tf 0 0 0 rg (Phase 10: Reports & Analytics) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 99.88976 cm
+q
+BT 1 0 0 1 0 110 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Dashboard Widgets:) Tj  T* (- Open Tasks) Tj  T* (- Completed Tasks) Tj  T* (- Overdue Tasks) Tj  T* (- Hours Logged) Tj  T* (- Project Progress) Tj  T*  T* (Library:) Tj  T* (- Recharts) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 91.88976 cm
+Q
+ 
+
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 78 741.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Phase 11: Audit Trail) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 639.8898 cm
+q
+BT 1 0 0 1 0 86 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Tables:) Tj  T* (- audit_logs) Tj  T*  T* (Features:) Tj  T* (- Track every important action) Tj  T* (- Activity feed) Tj  T* (- User accountability) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 631.8898 cm
+Q
+q
+1 0 0 1 78 609.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Phase 12: Production Readiness) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 423.8898 cm
+q
+BT 1 0 0 1 0 170 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Security:) Tj  T* (- CSRF Protection) Tj  T* (- XSS Protection) Tj  T* (- CORS) Tj  T* (- Rate Limiting) Tj  T*  T* (Infrastructure:) Tj  T* (- Docker Compose) Tj  T* (- PostgreSQL Backups) Tj  T* (- Logging) Tj  T*  T* (Testing:) Tj  T* (- Unit Tests) Tj  T* (- Integration Tests) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 415.8898 cm
+Q
+q
+1 0 0 1 78 393.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Recommended MVP) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 267.8898 cm
+q
+BT 1 0 0 1 0 110 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (Build these modules first:) Tj  T* (1. Authentication) Tj  T* (2. Organization Management) Tj  T* (3. Projects) Tj  T* (4. Tasks) Tj  T* (5. Kanban Board) Tj  T* (6. Time Tracking) Tj  T*  T* (These modules provide approximately 70% of the functionality found in Zoho Projects.) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 259.8898 cm
+Q
+q
+1 0 0 1 78 237.8898 cm
+q
+0 0 0 rg
+BT 1 0 0 1 0 4 Tm /F2 18 Tf 22 TL (Folder Structure) Tj T* ET
+Q
+Q
+q
+1 0 0 1 78 87.88976 cm
+q
+BT 1 0 0 1 0 134 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (project-management-system) Tj  T*  T* (frontend/) Tj  T* (app/) Tj  T* (components/) Tj  T* (services/) Tj  T* (hooks/) Tj  T* (types/) Tj  T*  T* (backend/) Tj  T* (src/) Tj T* ET
+Q
+Q
+ 
+
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+q
+1 0 0 1 78 631.8898 cm
+q
+BT 1 0 0 1 0 122 Tm 12 TL /F1 10 Tf 0 0 0 rg  T* (auth/) Tj  T* (users/) Tj  T* (organizations/) Tj  T* (projects/) Tj  T* (tasks/) Tj  T* (timesheets/) Tj  T* (issues/) Tj  T* (notifications/) Tj  T* (reports/) Tj  T* (prisma/) Tj  T* ET
+Q
+Q
+q
+1 0 0 1 78 623.8898 cm
+Q
+ 
+
