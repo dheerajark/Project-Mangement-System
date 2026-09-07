@@ -12,8 +12,83 @@ services:
       - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  postgres-backup:
+    image: postgres:15-alpine
+    container_name: pms_postgres_backup
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pgbackup:/var/backups
+    environment:
+      PGPASSWORD: postgrespassword
+    entrypoint: >
+      sh -c '
+      echo "Starting PostgreSQL backup cron emulator..."
+      while true; do
+        sleep 86400
+        echo "Creating database backup..."
+        pg_dump -h postgres -U postgres -d project_management_system | gzip > /var/backups/backup-$$(date +%Y-%m-%d-%H%M%S).sql.gz
+        echo "Backup complete."
+      done
+      '
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pms_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/project_management_system?schema=public
+      JWT_ACCESS_SECRET: super-secret-jwt-access-key-12345
+      JWT_REFRESH_SECRET: super-secret-jwt-refresh-key-67890
+      NODE_ENV: production
+      PORT: 3000
+      ALLOWED_ORIGINS: http://localhost,http://localhost:3000,http://localhost:3001,http://localhost:80
+    command: >
+      sh -c "npx prisma migrate deploy &&
+             npx prisma db seed &&
+             node dist/src/main"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pms_frontend
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost/api
+      NODE_ENV: production
+      PORT: 3001
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: pms_nginx
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
     restart: unless-stopped
 
 volumes:
   pgdata:
+    driver: local
+  pgbackup:
     driver: local

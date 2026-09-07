@@ -40,6 +40,16 @@ export class ProjectController {
     return this.projectService.getProjects(organizationId, userId);
   }
 
+  @Get('templates')
+  @Permissions('VIEW_PROJECT')
+  @ApiOperation({ summary: 'Get all project templates' })
+  @ApiResponse({ status: 200, description: 'List of project templates retrieved successfully.' })
+  findTemplates(
+    @TenantId() organizationId: string,
+  ) {
+    return this.projectService.getTemplates(organizationId);
+  }
+
   @Get(':id')
   @Permissions('VIEW_PROJECT')
   @ApiOperation({ summary: 'Get project details by ID' })

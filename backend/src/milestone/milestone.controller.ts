@@ -1,12 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { MilestoneService } from './milestone.service';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 import { TenantId } from '../auth/decorators/tenant-id.decorator';
 import { GetCurrentUserId } from '../auth/decorators/get-current-user-id.decorator';
+import { GetCurrentUser } from '../auth/decorators/get-current-user.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { MilestoneStatus } from '@prisma/client';
 
 @ApiTags('Milestones')
 @ApiBearerAuth()
@@ -14,6 +16,25 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 @Controller()
 export class MilestoneController {
   constructor(private milestoneService: MilestoneService) {}
+
+  @Get('milestones')
+  @Permissions('VIEW_MILESTONE')
+  @ApiOperation({ summary: 'Get all milestones across projects with filtering' })
+  @ApiResponse({ status: 200, description: 'Milestones retrieved successfully.' })
+  getAllMilestones(
+    @TenantId() organizationId: string,
+    @GetCurrentUserId() userId: string,
+    @GetCurrentUser('permissions') permissions: string[],
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: MilestoneStatus,
+    @Query('search') search?: string,
+  ) {
+    return this.milestoneService.getAllMilestones(organizationId, userId, permissions, {
+      projectId,
+      status,
+      search,
+    });
+  }
 
   @Post('projects/:projectId/milestones')
   @Permissions('CREATE_MILESTONE')

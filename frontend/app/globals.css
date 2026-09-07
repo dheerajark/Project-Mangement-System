@@ -1,29 +1,210 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0e0f11; /* Deep charcoal background */
-  --foreground: #f4f4f5; /* Off-white text */
-  --card: #1a1c20; /* Dark charcoal card background */
-  --card-foreground: #f4f4f5;
-  --primary: #10b981; /* Emerald Green 500 accent */
+  /* Ergonomic Modern Light Palette (Default - Zoho & Linear Inspired) */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --primary: #2563eb;
   --primary-foreground: #ffffff;
-  --secondary: #34d399; /* Emerald Green 400 */
-  --muted: #282b30; /* Muted surface background */
-  --muted-foreground: #9ca3af; /* Gray text secondary */
-  --border: #282b30; /* Muted border */
+  --secondary: #3b82f6;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+
+  --slate-150: #0f172a;
+  --slate-155: #1e293b;
+  --slate-250: #334155;
+  --slate-350: #475569;
+  --slate-450: #64748b;
+  --slate-505: #94a3b8;
+  --slate-650: #cbd5e1;
+  --slate-655: #e2e8f0;
+}
+
+.dark, :root.dark {
+  /* Eye-Resting Dark Mode */
+  --background: #0b0f19;
+  --foreground: #f8fafc;
+  --card: #151d2a;
+  --card-foreground: #f8fafc;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #60a5fa;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --border: #263346;
+
+  --slate-150: #f8fafc;
+  --slate-155: #f1f5f9;
+  --slate-250: #e2e8f0;
+  --slate-350: #cbd5e1;
+  --slate-450: #94a3b8;
+  --slate-505: #64748b;
+  --slate-650: #334155;
+  --slate-655: #1e293b;
+}
+
+.dim, :root.dim {
+  /* Soft Charcoal Dim Mode (Zoho Dim Eye Care) */
+  --background: #1b2028;
+  --foreground: #e2e8f0;
+  --card: #242b36;
+  --card-foreground: #e2e8f0;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #60a5fa;
+  --muted: #2d3644;
+  --muted-foreground: #94a3b8;
+  --border: #333e50;
+
+  --slate-150: #f1f5f9;
+  --slate-155: #e2e8f0;
+  --slate-250: #cbd5e1;
+  --slate-350: #94a3b8;
+  --slate-450: #64748b;
+  --slate-505: #475569;
+  --slate-650: #334155;
+  --slate-655: #1e293b;
 }
 
 .light {
-  --background: #f3f4f6; /* Cool Gray 100 background */
-  --foreground: #111827; /* Dark Gray primary text */
-  --card: #ffffff; /* White card surface */
-  --card-foreground: #111827;
-  --primary: #059669; /* Emerald Green 600 accent */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --primary: #2563eb;
   --primary-foreground: #ffffff;
-  --secondary: #10b981; /* Emerald Green 500 */
-  --muted: #e5e7eb; /* Cool Gray 200 muted */
-  --muted-foreground: #4b5563; /* Cool Gray 600 secondary text */
-  --border: #d1d5db; /* Cool Gray 300 border */
+  --secondary: #3b82f6;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+
+  --slate-150: #0f172a;
+  --slate-155: #1e293b;
+  --slate-250: #334155;
+  --slate-350: #475569;
+  --slate-450: #64748b;
+  --slate-505: #94a3b8;
+  --slate-650: #cbd5e1;
+  --slate-655: #e2e8f0;
+}
+
+/* 6 Zoho Color Swatch Accent Themes */
+
+/* 1. Orange / Amber Theme (#f97316) */
+:root.theme-orange, .theme-orange, :root.theme-amber, .theme-amber {
+  --color-indigo-50: #fff7ed;
+  --color-indigo-100: #ffedd5;
+  --color-indigo-200: #fed7aa;
+  --color-indigo-300: #fdba74;
+  --color-indigo-400: #fb923c;
+  --color-indigo-450: #f97316;
+  --color-indigo-500: #f97316;
+  --color-indigo-550: #ea580c;
+  --color-indigo-600: #ea580c;
+  --color-indigo-650: #c2410c;
+  --color-indigo-655: #9a3412;
+  --color-indigo-700: #c2410c;
+  --color-indigo-800: #9a3412;
+  --color-indigo-900: #7c2d12;
+  --color-indigo-950: #431407;
+}
+
+/* 2. Cyan Theme (#0ea5e9) */
+:root.theme-cyan, .theme-cyan {
+  --color-indigo-50: #f0f9ff;
+  --color-indigo-100: #e0f2fe;
+  --color-indigo-200: #bae6fd;
+  --color-indigo-300: #7dd3fc;
+  --color-indigo-400: #38bdf8;
+  --color-indigo-450: #0ea5e9;
+  --color-indigo-500: #0ea5e9;
+  --color-indigo-550: #0284c7;
+  --color-indigo-600: #0284c7;
+  --color-indigo-650: #0369a1;
+  --color-indigo-655: #075985;
+  --color-indigo-700: #0369a1;
+  --color-indigo-800: #075985;
+  --color-indigo-900: #0c4a6e;
+  --color-indigo-950: #082f49;
+}
+
+/* 3. Teal Theme (#14b8a6) */
+:root.theme-teal, .theme-teal {
+  --color-indigo-50: #f0fdf4;
+  --color-indigo-100: #ccfbf1;
+  --color-indigo-200: #99f6e4;
+  --color-indigo-300: #5eead4;
+  --color-indigo-400: #2dd4bf;
+  --color-indigo-450: #14b8a6;
+  --color-indigo-500: #14b8a6;
+  --color-indigo-550: #0d9488;
+  --color-indigo-600: #0d9488;
+  --color-indigo-650: #0f766e;
+  --color-indigo-655: #115e59;
+  --color-indigo-700: #0f766e;
+  --color-indigo-800: #115e59;
+  --color-indigo-900: #134e4a;
+  --color-indigo-950: #042f2e;
+}
+
+/* 4. Crimson Red Theme (#ef4444) */
+:root.theme-red, .theme-red, :root.theme-rose, .theme-rose {
+  --color-indigo-50: #fef2f2;
+  --color-indigo-100: #fee2e2;
+  --color-indigo-200: #fecaca;
+  --color-indigo-300: #fca5a5;
+  --color-indigo-400: #f87171;
+  --color-indigo-450: #ef4444;
+  --color-indigo-500: #ef4444;
+  --color-indigo-550: #dc2626;
+  --color-indigo-600: #dc2626;
+  --color-indigo-650: #b91c1c;
+  --color-indigo-655: #991b1b;
+  --color-indigo-700: #b91c1c;
+  --color-indigo-800: #991b1b;
+  --color-indigo-900: #7f1d1d;
+  --color-indigo-950: #450a0a;
+}
+
+/* 5. Emerald Green Theme (#10b981) */
+:root.theme-green, .theme-green, :root.theme-emerald, .theme-emerald {
+  --color-indigo-50: #ecfdf5;
+  --color-indigo-100: #d1fae5;
+  --color-indigo-200: #a7f3d0;
+  --color-indigo-300: #6ee7b7;
+  --color-indigo-400: #34d399;
+  --color-indigo-450: #10b981;
+  --color-indigo-500: #10b981;
+  --color-indigo-550: #059669;
+  --color-indigo-600: #059669;
+  --color-indigo-650: #047857;
+  --color-indigo-655: #065f46;
+  --color-indigo-700: #047857;
+  --color-indigo-800: #065f46;
+  --color-indigo-900: #064e3b;
+  --color-indigo-950: #022c22;
+}
+
+/* 6. Royal Blue / Indigo Theme (#3b82f6) */
+:root.theme-blue, .theme-blue, :root.theme-indigo, .theme-indigo {
+  --color-indigo-50: #eff6ff;
+  --color-indigo-100: #dbeafe;
+  --color-indigo-200: #bfdbfe;
+  --color-indigo-300: #93c5fd;
+  --color-indigo-400: #60a5fa;
+  --color-indigo-450: #3b82f6;
+  --color-indigo-500: #3b82f6;
+  --color-indigo-550: #2563eb;
+  --color-indigo-600: #2563eb;
+  --color-indigo-650: #1d4ed8;
+  --color-indigo-655: #1e40af;
+  --color-indigo-700: #1d4ed8;
+  --color-indigo-800: #1e40af;
+  --color-indigo-900: #1e3a8a;
+  --color-indigo-950: #172554;
 }
 
 @theme inline {
@@ -37,6 +218,15 @@
   --color-slate-400: var(--muted-foreground);
   --color-slate-500: var(--muted-foreground);
 
+  --color-slate-150: var(--slate-150);
+  --color-slate-155: var(--slate-155);
+  --color-slate-250: var(--slate-250);
+  --color-slate-350: var(--slate-350);
+  --color-slate-450: var(--slate-450);
+  --color-slate-505: var(--slate-505);
+  --color-slate-650: var(--slate-650);
+  --color-slate-655: var(--slate-655);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -47,8 +237,13 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  --color-indigo-450: var(--color-indigo-450);
+  --color-indigo-550: var(--color-indigo-550);
+  --color-indigo-650: var(--color-indigo-650);
+  --color-indigo-655: var(--color-indigo-655);
 }
 
 body {
@@ -56,23 +251,24 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
   overflow-x: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Custom Scrollbar */
+/* Ergonomic Modern Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #020617;
+  background: var(--background);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--border);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: var(--muted-foreground);
 }

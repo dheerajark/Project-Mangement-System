@@ -17,6 +17,7 @@ import {
   X,
   FileCheck
 } from 'lucide-react';
+import { useFormatDate } from '@/hooks/useFormatDate';
 
 interface Notification {
   id: string;
@@ -40,6 +41,7 @@ interface ToastItem {
 }
 
 export default function NotificationBell() {
+  const formatDate = useFormatDate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -176,7 +178,7 @@ export default function NotificationBell() {
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays === 1) return 'Yesterday';
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return formatDate(date);
   };
 
   return (

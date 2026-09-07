@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { TimeTrackingService } from './time-tracking.service';
 import { LogManualTimeDto } from './dto/log-manual-time.dto';
 import { StartTimerDto } from './dto/start-timer.dto';
@@ -75,6 +75,32 @@ export class TimeTrackingController {
     return this.timeTrackingService.getActiveTimer(userId);
   }
 
+  @Get('time-entries')
+  @Permissions('VIEW_TIME_ENTRY')
+  @ApiOperation({ summary: 'Get all time entries across projects with filtering' })
+  @ApiResponse({ status: 200, description: 'Time entries retrieved successfully.' })
+  getAllEntries(
+    @TenantId() organizationId: string,
+    @GetCurrentUserId() userId: string,
+    @GetCurrentUser('permissions') permissions: string[],
+    @Query('projectId') projectId?: string,
+    @Query('userId') filterUserId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('billable') billable?: string,
+    @Query('status') status?: string,
+  ) {
+    const billableBool = billable === 'true' ? true : billable === 'false' ? false : undefined;
+    return this.timeTrackingService.getAllTimeEntries(organizationId, userId, permissions, {
+      projectId,
+      userId: filterUserId,
+      startDate,
+      endDate,
+      billable: billableBool,
+      status,
+    });
+  }
+
   @Get('time-entries/me')
   @Permissions('VIEW_TIME_ENTRY')
   @ApiOperation({ summary: 'Get all time logs for the current user' })
@@ -85,6 +111,7 @@ export class TimeTrackingController {
   ) {
     return this.timeTrackingService.getUserTimeEntries(organizationId, userId);
   }
+
 
   @Post('time-entries/:id/archive')
   @Permissions('ARCHIVE_TIME_ENTRY')

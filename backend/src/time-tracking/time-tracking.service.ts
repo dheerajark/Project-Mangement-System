@@ -304,6 +304,84 @@ export class TimeTrackingService {
     });
   }
 
+  async getAllTimeEntries(
+    organizationId: string,
+    userId: string,
+    userPermissions: string[],
+    filters: {
+      projectId?: string;
+      userId?: string;
+      startDate?: string;
+      endDate?: string;
+      billable?: boolean;
+      status?: string;
+    },
+  ) {
+    const canViewAll = userPermissions.includes('APPROVE_TIMESHEET');
+    
+    const whereClause: any = {
+      organizationId,
+      isTimerRunning: false,
+      deletedAt: null,
+    };
+
+    if (!canViewAll) {
+      whereClause.userId = userId;
+    } else if (filters.userId) {
+      whereClause.userId = filters.userId;
+    }
+
+    if (filters.projectId) {
+      whereClause.projectId = filters.projectId;
+    }
+
+    if (filters.billable !== undefined) {
+      whereClause.billable = filters.billable;
+    }
+
+    if (filters.startDate || filters.endDate) {
+      whereClause.loggedAt = {};
+      if (filters.startDate) {
+        whereClause.loggedAt.gte = new Date(filters.startDate);
+      }
+      if (filters.endDate) {
+        const end = new Date(filters.endDate);
+        end.setHours(23, 59, 59, 999);
+        whereClause.loggedAt.lte = end;
+      }
+    }
+
+    if (filters.status) {
+      if (filters.status === 'UNSUBMITTED') {
+        whereClause.timesheetId = null;
+      } else {
+        whereClause.timesheet = {
+          status: filters.status,
+        };
+      }
+    }
+
+    return this.prisma.timeEntry.findMany({
+      where: whereClause,
+      include: {
+        user: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        project: {
+          select: { id: true, name: true, projectCode: true },
+        },
+        task: {
+          select: { id: true, title: true, taskNumber: true },
+        },
+        timesheet: {
+          select: { id: true, status: true },
+        },
+      },
+      orderBy: { loggedAt: 'desc' },
+    });
+  }
+
+
   async getTaskTimeEntries(organizationId: string, userId: string, taskId: string) {
     return this.prisma.timeEntry.findMany({
       where: { taskId, organizationId, isTimerRunning: false, deletedAt: null },

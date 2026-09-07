@@ -1,4 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import * as Joi from 'joi';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -15,9 +18,28 @@ import { NotificationModule } from './notification/notification.module';
 import { ReportModule } from './report/report.module';
 import { APP_GUARD } from '@nestjs/core';
 import { AccessTokenGuard } from './auth/guards/accessToken.guard';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validationSchema: Joi.object({
+        NODE_ENV: Joi.string()
+          .valid('development', 'production', 'test')
+          .default('development'),
+        PORT: Joi.number().default(3000),
+        DATABASE_URL: Joi.string().required(),
+        JWT_ACCESS_SECRET: Joi.string().required(),
+        JWT_REFRESH_SECRET: Joi.string().required(),
+        ALLOWED_ORIGINS: Joi.string().default('http://localhost:3000,http://localhost:3001,http://localhost:80'),
+      }),
+    }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000, // 60 seconds
+      limit: 100, // limit each IP to 100 requests per ttl
+    }]),
     PrismaModule,
     AuthModule,
     AuditModule,
@@ -30,14 +52,23 @@ import { AccessTokenGuard } from './auth/guards/accessToken.guard';
     IssueModule,
     NotificationModule,
     ReportModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     {
       provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
       useClass: AccessTokenGuard,
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+  }
+}

@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Minus,
 } from 'lucide-react';
+import { useFormatDate } from '@/hooks/useFormatDate';
 
 interface TimeLogsTabProps {
   projectId: string;
@@ -28,6 +29,7 @@ interface TimeLogsTabProps {
 export default function TimeLogsTab({ projectId }: TimeLogsTabProps) {
   const { user, hasPermission } = useAuth();
   const queryClient = useQueryClient();
+  const formatDate = useFormatDate();
 
   // Tab State: "logs" or "timesheets"
   const [currentSubTab, setCurrentSubTab] = useState<'logs' | 'timesheets'>('logs');
@@ -340,7 +342,7 @@ export default function TimeLogsTab({ projectId }: TimeLogsTabProps) {
                           </span>
                         </td>
                         <td className="px-6 py-3.5 text-slate-400 font-medium">
-                          {new Date(log.loggedAt).toLocaleDateString()}
+                          {formatDate(log.loggedAt)}
                         </td>
                         <td className="px-6 py-3.5">
                           {log.task ? (
@@ -454,10 +456,10 @@ export default function TimeLogsTab({ projectId }: TimeLogsTabProps) {
                           </span>
                         </td>
                         <td className="px-6 py-3.5 text-slate-400 font-medium">
-                          {new Date(ts.startDate).toLocaleDateString()}
+                          {formatDate(ts.startDate)}
                         </td>
                         <td className="px-6 py-3.5 text-slate-400 font-medium">
-                          {new Date(ts.endDate).toLocaleDateString()}
+                          {formatDate(ts.endDate)}
                         </td>
                         <td className="px-6 py-3.5">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase flex items-center gap-1 w-max ${statusColor}`}>

@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { CreateIssueCommentDto } from './dto/create-issue-comment.dto';
-import { IssueStatus, NotificationType } from '@prisma/client';
+import { IssueStatus, NotificationType, IssuePriority, IssueSeverity, IssueType } from '@prisma/client';
 import { NotificationService } from '../notification/notification.service';
 
 const ISSUE_INCLUDE = {
@@ -48,6 +48,84 @@ export class IssueService {
     private prisma: PrismaService,
     private notificationService: NotificationService,
   ) {}
+
+  async getAllIssues(
+    organizationId: string,
+    userId: string,
+    userPermissions: string[],
+    filters: {
+      projectId?: string;
+      assigneeId?: string;
+      status?: IssueStatus;
+      priority?: IssuePriority;
+      severity?: IssueSeverity;
+      type?: IssueType;
+      search?: string;
+    },
+  ) {
+    const canViewAll = userPermissions.includes('VIEW_ALL_ISSUES');
+
+    const whereClause: any = {
+      organizationId,
+      deletedAt: null,
+      project: {
+        deletedAt: null,
+        OR: [
+          { visibility: 'ORGANIZATION' },
+          { members: { some: { userId, deletedAt: null } } },
+        ],
+      },
+    };
+
+    if (filters.projectId) whereClause.projectId = filters.projectId;
+    if (filters.assigneeId) whereClause.assigneeId = filters.assigneeId;
+    if (filters.status) whereClause.status = filters.status;
+    if (filters.priority) whereClause.priority = filters.priority;
+    if (filters.severity) whereClause.severity = filters.severity;
+    if (filters.type) whereClause.type = filters.type;
+
+    const conditions: any[] = [];
+    if (!canViewAll) {
+      conditions.push({
+        OR: [
+          { assigneeId: userId },
+          { reporterId: userId },
+        ],
+      });
+    }
+
+    if (filters.search) {
+      conditions.push({
+        OR: [
+          { title: { contains: filters.search } },
+          { description: { contains: filters.search } },
+        ],
+      });
+    }
+
+    if (conditions.length > 0) {
+      whereClause.AND = conditions;
+    }
+
+    return this.prisma.issue.findMany({
+      where: whereClause,
+      include: {
+        assignee: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        reporter: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        project: {
+          select: { id: true, name: true, projectCode: true },
+        },
+        _count: {
+          select: { comments: true },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
 
   async createIssue(
     orgId: string,

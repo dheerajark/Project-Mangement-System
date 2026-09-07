@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
-import { NotificationType } from '@prisma/client';
+import { NotificationType, MilestoneStatus } from '@prisma/client';
 import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
@@ -11,6 +11,72 @@ export class MilestoneService {
     private prisma: PrismaService,
     private notificationService: NotificationService,
   ) {}
+
+  async getAllMilestones(
+    organizationId: string,
+    userId: string,
+    userPermissions: string[],
+    filters: {
+      projectId?: string;
+      status?: MilestoneStatus;
+      search?: string;
+    },
+  ) {
+    const canViewAll = userPermissions.includes('VIEW_ALL_MILESTONES');
+
+    const projectFilter: any = {
+      deletedAt: null,
+    };
+
+    if (canViewAll) {
+      projectFilter.OR = [
+        { visibility: 'ORGANIZATION' },
+        { members: { some: { userId, deletedAt: null } } },
+      ];
+    } else {
+      projectFilter.members = {
+        some: { userId, deletedAt: null },
+      };
+    }
+
+    const whereClause: any = {
+      organizationId,
+      deletedAt: null,
+      project: projectFilter,
+    };
+
+    if (filters.projectId) whereClause.projectId = filters.projectId;
+    if (filters.status) whereClause.status = filters.status;
+    if (filters.search) {
+      whereClause.title = { contains: filters.search };
+    }
+
+    const milestones = await this.prisma.milestone.findMany({
+      where: whereClause,
+      include: {
+        project: {
+          select: { id: true, name: true, projectCode: true },
+        },
+        tasks: {
+          where: { deletedAt: null },
+        },
+      },
+      orderBy: { dueDate: 'asc' },
+    });
+
+    return milestones.map((m) => {
+      const totalTasks = m.tasks.length;
+      const completedTasks = m.tasks.filter((t) => t.status === 'DONE').length;
+      const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+      const { tasks, ...milestoneWithoutTasks } = m;
+      return {
+        ...milestoneWithoutTasks,
+        totalTasks,
+        completedTasks,
+        progress,
+      };
+    });
+  }
 
   async verifyProjectAccess(projectId: string, organizationId: string, userId: string) {
     const project = await this.prisma.project.findFirst({

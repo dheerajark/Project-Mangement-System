@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -8,9 +8,11 @@ import { CreateAttachmentMetadataDto } from './dto/create-attachment-metadata.dt
 import { ReorderTaskDto } from './dto/reorder-task.dto';
 import { TenantId } from '../auth/decorators/tenant-id.decorator';
 import { GetCurrentUserId } from '../auth/decorators/get-current-user-id.decorator';
+import { GetCurrentUser } from '../auth/decorators/get-current-user.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { TaskStatus, TaskPriority, TaskType } from '@prisma/client';
 
 @ApiTags('Tasks')
 @ApiBearerAuth()
@@ -18,6 +20,31 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 @Controller()
 export class TaskController {
   constructor(private taskService: TaskService) {}
+
+  @Get('tasks')
+  @Permissions('VIEW_TASK')
+  @ApiOperation({ summary: 'Get all tasks across projects with filtering' })
+  @ApiResponse({ status: 200, description: 'Tasks retrieved successfully.' })
+  getAllTasks(
+    @TenantId() organizationId: string,
+    @GetCurrentUserId() userId: string,
+    @GetCurrentUser('permissions') permissions: string[],
+    @Query('projectId') projectId?: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('status') status?: TaskStatus,
+    @Query('priority') priority?: TaskPriority,
+    @Query('type') type?: TaskType,
+    @Query('search') search?: string,
+  ) {
+    return this.taskService.getAllTasks(organizationId, userId, permissions, {
+      projectId,
+      assigneeId,
+      status,
+      priority,
+      type,
+      search,
+    });
+  }
 
   @Post('tasks')
   @Permissions('CREATE_TASK')

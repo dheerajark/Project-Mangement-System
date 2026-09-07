@@ -5,7 +5,7 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { UpdateProjectSettingsDto } from './dto/update-project-settings.dto';
-import { ProjectVisibility, ProjectStatus, ProjectMemberRole } from '@prisma/client';
+import { ProjectVisibility, ProjectStatus, ProjectMemberRole, TaskStatus } from '@prisma/client';
 
 @Injectable()
 export class ProjectService {
@@ -46,6 +46,15 @@ export class ProjectService {
           startDate: dto.startDate ? new Date(dto.startDate) : null,
           endDate: dto.endDate ? new Date(dto.endDate) : null,
           visibility: dto.visibility || ProjectVisibility.PRIVATE,
+          currency: dto.currency || 'USD',
+          budgetType: dto.budgetType || 'NONE',
+          budgetAmount: dto.budgetAmount || null,
+          budgetHours: dto.budgetHours || null,
+          billingMethod: dto.billingMethod || 'NONE',
+          billingRate: dto.billingRate || null,
+          tags: dto.tags || null,
+          isTemplate: dto.isTemplate || false,
+          taskLayout: dto.taskLayout || 'STANDARD',
           status: ProjectStatus.ACTIVE,
           organizationId,
           ownerId: userId,
@@ -72,7 +81,83 @@ export class ProjectService {
         },
       });
 
-      // 5. Write Transaction-safe Audit Log
+      // 5. Template Baseline Cloning (If templateProjectId is provided)
+      if (dto.templateProjectId) {
+        const sourceTemplate = await tx.project.findFirst({
+          where: { id: dto.templateProjectId, organizationId, deletedAt: null },
+          include: {
+            milestones: { where: { deletedAt: null } },
+            tasks: { where: { deletedAt: null } },
+            members: { where: { deletedAt: null } },
+          },
+        });
+
+        if (sourceTemplate) {
+          const milestoneMap = new Map<string, string>();
+
+          // 5a. Clone Milestones (Default: true if not explicitly false)
+          if (dto.copyMilestones !== false) {
+            for (const ms of sourceTemplate.milestones) {
+              const newMs = await tx.milestone.create({
+                data: {
+                  projectId: project.id,
+                  organizationId,
+                  title: ms.title,
+                  description: ms.description,
+                  startDate: ms.startDate,
+                  dueDate: ms.dueDate,
+                  status: 'PLANNED',
+                },
+              });
+              milestoneMap.set(ms.id, newMs.id);
+            }
+          }
+
+          // 5b. Clone Tasks (Default: true if not explicitly false)
+          if (dto.copyTasks !== false) {
+            let taskCounter = project.nextTaskNumber;
+            for (const task of sourceTemplate.tasks) {
+              await tx.task.create({
+                data: {
+                  projectId: project.id,
+                  organizationId,
+                  taskNumber: taskCounter++,
+                  title: task.title,
+                  description: task.description,
+                  priority: task.priority,
+                  type: task.type,
+                  status: TaskStatus.TODO,
+                  estimatedHours: task.estimatedHours,
+                  milestoneId: task.milestoneId ? milestoneMap.get(task.milestoneId) || null : null,
+                  reporterId: userId,
+                },
+              });
+            }
+            await tx.project.update({
+              where: { id: project.id },
+              data: { nextTaskNumber: taskCounter },
+            });
+          }
+
+          // 5c. Clone Members (Default: false unless explicitly true)
+          if (dto.copyMembers === true) {
+            for (const m of sourceTemplate.members) {
+              if (m.userId !== userId) {
+                await tx.projectMember.create({
+                  data: {
+                    projectId: project.id,
+                    userId: m.userId,
+                    role: m.role,
+                    addedBy: userId,
+                  },
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // 6. Write Transaction-safe Audit Log
       await tx.auditLog.create({
         data: {
           organizationId,
@@ -89,6 +174,31 @@ export class ProjectService {
         settings,
         members: [member],
       };
+    });
+  }
+
+  async getTemplates(organizationId: string) {
+    return this.prisma.project.findMany({
+      where: {
+        organizationId,
+        isTemplate: true,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        projectCode: true,
+        tags: true,
+        taskLayout: true,
+        _count: {
+          select: {
+            tasks: true,
+            milestones: true,
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
     });
   }
 
@@ -118,23 +228,13 @@ export class ProjectService {
             email: true,
           },
         },
-        settings: true,
-        members: {
-          where: { deletedAt: null },
-          include: {
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
-        },
         tasks: {
           where: { deletedAt: null },
           select: { status: true },
+        },
+        timeEntries: {
+          where: { deletedAt: null },
+          select: { hours: true, billable: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -144,10 +244,16 @@ export class ProjectService {
       const totalTasks = p.tasks.length;
       const completedTasks = p.tasks.filter((t) => t.status === 'DONE').length;
       const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-      const { tasks, ...projectWithoutTasks } = p;
+      
+      const loggedHours = p.timeEntries.reduce((sum, te) => sum + (te.hours || 0), 0);
+      const spentAmount = p.billingRate ? loggedHours * p.billingRate : 0;
+
+      const { tasks, timeEntries, ...projectWithoutTasks } = p;
       return {
         ...projectWithoutTasks,
         progress,
+        loggedHours,
+        spentAmount,
       };
     });
   }
@@ -186,6 +292,10 @@ export class ProjectService {
           where: { deletedAt: null },
           select: { status: true },
         },
+        timeEntries: {
+          where: { deletedAt: null },
+          select: { hours: true, billable: true },
+        },
       },
     });
 
@@ -203,11 +313,17 @@ export class ProjectService {
     const totalTasks = project.tasks.length;
     const completedTasks = project.tasks.filter((t) => t.status === 'DONE').length;
     const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-    const { tasks, ...projectWithoutTasks } = project;
+
+    const loggedHours = project.timeEntries.reduce((sum, te) => sum + (te.hours || 0), 0);
+    const spentAmount = project.billingRate ? loggedHours * project.billingRate : 0;
+
+    const { tasks, timeEntries, ...projectWithoutTasks } = project;
 
     return {
       ...projectWithoutTasks,
       progress,
+      loggedHours,
+      spentAmount,
     };
   }
 
@@ -227,6 +343,15 @@ export class ProjectService {
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
         visibility: dto.visibility,
         status: dto.status,
+        currency: dto.currency,
+        budgetType: dto.budgetType,
+        budgetAmount: dto.budgetAmount,
+        budgetHours: dto.budgetHours,
+        billingMethod: dto.billingMethod,
+        billingRate: dto.billingRate,
+        tags: dto.tags,
+        isTemplate: dto.isTemplate,
+        taskLayout: dto.taskLayout,
       },
     });
 

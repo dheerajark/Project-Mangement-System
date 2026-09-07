@@ -18,8 +18,9 @@ import { CreateIssueCommentDto } from './dto/create-issue-comment.dto';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 import { GetCurrentUserId } from '../auth/decorators/get-current-user-id.decorator';
+import { GetCurrentUser } from '../auth/decorators/get-current-user.decorator';
 import { TenantId } from '../auth/decorators/tenant-id.decorator';
-import { IssueStatus } from '@prisma/client';
+import { IssueStatus, IssuePriority, IssueSeverity, IssueType } from '@prisma/client';
 
 @ApiTags('Issues')
 @ApiBearerAuth()
@@ -27,6 +28,32 @@ import { IssueStatus } from '@prisma/client';
 @Controller()
 export class IssueController {
   constructor(private readonly issueService: IssueService) {}
+
+  @Get('issues')
+  @Permissions('VIEW_ISSUE')
+  @ApiOperation({ summary: 'Get all issues across projects with filtering' })
+  getAllIssues(
+    @TenantId() organizationId: string,
+    @GetCurrentUserId() userId: string,
+    @GetCurrentUser('permissions') permissions: string[],
+    @Query('projectId') projectId?: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('status') status?: IssueStatus,
+    @Query('priority') priority?: IssuePriority,
+    @Query('severity') severity?: IssueSeverity,
+    @Query('type') type?: IssueType,
+    @Query('search') search?: string,
+  ) {
+    return this.issueService.getAllIssues(organizationId, userId, permissions, {
+      projectId,
+      assigneeId,
+      status,
+      priority,
+      severity,
+      type,
+      search,
+    });
+  }
 
   // ─── Create Issue ──────────────────────────────────────────────────────────
   @Post('projects/:projectId/issues')

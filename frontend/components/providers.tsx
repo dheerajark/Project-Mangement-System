@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import { api } from '../services/api';
 import FloatingTimer from './floating-timer';
 
+import { getPersonalPreferences } from '../services/getPersonalPreferences';
+
 function ThemeApplier() {
   const { data: settings } = useQuery({
     queryKey: ['settings'],
@@ -18,20 +20,58 @@ function ThemeApplier() {
         return null;
       }
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes stale time
+    staleTime: 5 * 60 * 1000,
   });
 
-  useEffect(() => {
-    if (settings && settings.theme) {
-      const root = window.document.documentElement;
-      if (settings.theme === 'light') {
-        root.classList.add('light');
-        root.style.colorScheme = 'light';
-      } else {
-        root.classList.remove('light');
-        root.style.colorScheme = 'dark';
-      }
+  const applyPreferences = () => {
+    if (typeof window === 'undefined') return;
+    const root = window.document.documentElement;
+    const personal = getPersonalPreferences();
+
+    // Clear previous theme & mode classes
+    root.classList.remove('light', 'dark', 'dim');
+    root.classList.remove(
+      'theme-indigo',
+      'theme-emerald',
+      'theme-amber',
+      'theme-rose',
+      'theme-slate',
+      'theme-orange',
+      'theme-cyan',
+      'theme-teal',
+      'theme-red',
+      'theme-green',
+      'theme-blue'
+    );
+
+    let effectiveMode = personal.mode || (settings?.theme?.split('-')[0] === 'light' ? 'day' : 'night');
+    if (effectiveMode === 'auto') {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      effectiveMode = prefersDark ? 'night' : 'day';
     }
+
+    if (personal.dimMode || (effectiveMode as string) === 'dim') {
+      root.classList.add('dim');
+      root.style.colorScheme = 'dark';
+    } else if (effectiveMode === 'day') {
+      root.classList.add('light');
+      root.style.colorScheme = 'light';
+    } else {
+      root.classList.add('dark');
+      root.style.colorScheme = 'dark';
+    }
+
+    const orgAccent = settings?.theme?.split('-')[1] || 'blue';
+    const accent = personal.accentColor || orgAccent;
+    root.classList.add(`theme-${accent}`);
+  };
+
+  useEffect(() => {
+    applyPreferences();
+    window.addEventListener('personal_preferences_changed', applyPreferences);
+    return () => {
+      window.removeEventListener('personal_preferences_changed', applyPreferences);
+    };
   }, [settings]);
 
   return null;

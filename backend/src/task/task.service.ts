@@ -18,6 +18,93 @@ export class TaskService {
     private notificationService: NotificationService,
   ) {}
 
+  async getAllTasks(
+    organizationId: string,
+    userId: string,
+    userPermissions: string[],
+    filters: {
+      projectId?: string;
+      assigneeId?: string;
+      status?: TaskStatus;
+      priority?: TaskPriority;
+      type?: TaskType;
+      search?: string;
+    },
+  ) {
+    const canViewAll = userPermissions.includes('VIEW_ALL_TASKS');
+
+    const whereClause: any = {
+      organizationId,
+      deletedAt: null,
+      project: {
+        deletedAt: null,
+        OR: [
+          { visibility: 'ORGANIZATION' },
+          { members: { some: { userId, deletedAt: null } } },
+        ],
+      },
+    };
+
+    if (filters.projectId) {
+      whereClause.projectId = filters.projectId;
+    }
+    if (filters.assigneeId) {
+      whereClause.assigneeId = filters.assigneeId;
+    }
+    if (filters.status) {
+      whereClause.status = filters.status;
+    }
+    if (filters.priority) {
+      whereClause.priority = filters.priority;
+    }
+    if (filters.type) {
+      whereClause.type = filters.type;
+    }
+
+    const conditions: any[] = [];
+    if (!canViewAll) {
+      conditions.push({
+        OR: [
+          { assigneeId: userId },
+          { reporterId: userId },
+        ],
+      });
+    }
+
+    if (filters.search) {
+      conditions.push({
+        OR: [
+          { title: { contains: filters.search } },
+          { description: { contains: filters.search } },
+        ],
+      });
+    }
+
+    if (conditions.length > 0) {
+      whereClause.AND = conditions;
+    }
+
+    return this.prisma.task.findMany({
+      where: whereClause,
+      include: {
+        assignee: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        reporter: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        project: {
+          select: { id: true, name: true, projectCode: true },
+        },
+        milestone: true,
+        labels: {
+          include: { label: true },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
   async autoTransitionMilestone(tx: any, milestoneId: string, taskStatus: TaskStatus, userId: string, organizationId: string) {
     if (taskStatus !== TaskStatus.DONE) {
       const milestone = await tx.milestone.findUnique({

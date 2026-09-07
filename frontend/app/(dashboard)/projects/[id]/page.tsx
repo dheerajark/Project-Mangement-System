@@ -33,6 +33,14 @@ import {
   Filter,
   X,
   Sliders,
+  DollarSign,
+  Coins,
+  Tag,
+  Layout,
+  Copy,
+  PieChart,
+  TrendingUp,
+  Flag,
 } from 'lucide-react';
 import Link from 'next/link';
 import TaskDetailDrawer from '@/components/task-detail-drawer';
@@ -41,7 +49,9 @@ import TimeLogsTab from '@/components/time-logs-tab';
 import MilestonesTab from '@/components/milestones-tab';
 import IssuesTab from '@/components/issues-tab';
 import NotificationBell from '@/components/notification-bell';
+import Header from '@/components/header';
 import ReportsTab from '@/components/reports-tab';
+import { useFormatDate } from '@/hooks/useFormatDate';
 
 export default function ProjectDetailsPage() {
   const { user, isAuthenticated, isLoading, hasPermission } = useAuth();
@@ -50,6 +60,7 @@ export default function ProjectDetailsPage() {
   const projectId = params.id as string;
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
+  const formatDate = useFormatDate();
 
   // Navigation Tabs State
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'members' | 'timeLogs' | 'milestones' | 'issues' | 'reports'>('overview');
@@ -62,6 +73,15 @@ export default function ProjectDetailsPage() {
   const [infoEndDate, setInfoEndDate] = useState('');
   const [infoVisibility, setInfoVisibility] = useState<'PRIVATE' | 'ORGANIZATION'>('PRIVATE');
   const [infoStatus, setInfoStatus] = useState<'PLANNING' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED'>('ACTIVE');
+  const [infoCurrency, setInfoCurrency] = useState('USD');
+  const [infoBudgetType, setInfoBudgetType] = useState('NONE');
+  const [infoBudgetAmount, setInfoBudgetAmount] = useState('');
+  const [infoBudgetHours, setInfoBudgetHours] = useState('');
+  const [infoBillingMethod, setInfoBillingMethod] = useState('NONE');
+  const [infoBillingRate, setInfoBillingRate] = useState('');
+  const [infoTags, setInfoTags] = useState('');
+  const [infoIsTemplate, setInfoIsTemplate] = useState(false);
+  const [infoTaskLayout, setInfoTaskLayout] = useState('STANDARD');
   const [infoError, setInfoError] = useState<string | null>(null);
 
   // Add Member State
@@ -89,8 +109,16 @@ export default function ProjectDetailsPage() {
   const [createTaskDueDate, setCreateTaskDueDate] = useState('');
   const [createTaskMilestoneId, setCreateTaskMilestoneId] = useState('');
   const [createTaskError, setCreateTaskError] = useState<string | null>(null);
+  const [autoOpenCreateMilestoneModal, setAutoOpenCreateMilestoneModal] = useState(false);
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
   const [reorderError, setReorderError] = useState<string | null>(null);
+
+  const handleOpenCreateTaskModalWithMilestone = (milestoneId?: string) => {
+    if (milestoneId) {
+      setCreateTaskMilestoneId(milestoneId);
+    }
+    setIsCreateTaskModalOpen(true);
+  };
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -250,8 +278,34 @@ export default function ProjectDetailsPage() {
       setInfoEndDate(project.endDate ? project.endDate.split('T')[0] : '');
       setInfoVisibility(project.visibility);
       setInfoStatus(project.status);
+      setInfoCurrency(project.currency || 'USD');
+      setInfoBudgetType(project.budgetType || 'NONE');
+      setInfoBudgetAmount(project.budgetAmount !== null && project.budgetAmount !== undefined ? String(project.budgetAmount) : '');
+      setInfoBudgetHours(project.budgetHours !== null && project.budgetHours !== undefined ? String(project.budgetHours) : '');
+      setInfoBillingMethod(project.billingMethod || 'NONE');
+      setInfoBillingRate(project.billingRate !== null && project.billingRate !== undefined ? String(project.billingRate) : '');
+      setInfoTags(Array.isArray(project.tags) ? project.tags.join(', ') : (project.tags || ''));
+      setInfoIsTemplate(project.isTemplate || false);
+      setInfoTaskLayout(project.taskLayout || 'STANDARD');
     }
   }, [project]);
+
+  const getCurrencySymbol = (code: string = 'USD') => {
+    switch (code) {
+      case 'EUR': return '€';
+      case 'GBP': return '£';
+      case 'INR': return '₹';
+      case 'CAD': return 'CA$';
+      case 'AUD': return 'A$';
+      case 'USD':
+      default: return '$';
+    }
+  };
+
+  const formatEnumLabel = (val?: string) => {
+    if (!val || val === 'NONE') return 'None';
+    return val.split('_').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+  };
 
   // Update Project Info Mutation
   const updateProjectMutation = useMutation({
@@ -374,6 +428,15 @@ export default function ProjectDetailsPage() {
       endDate: infoEndDate || null,
       visibility: infoVisibility,
       status: infoStatus,
+      currency: infoCurrency,
+      budgetType: infoBudgetType,
+      budgetAmount: infoBudgetAmount === '' ? null : parseFloat(infoBudgetAmount),
+      budgetHours: infoBudgetHours === '' ? null : parseFloat(infoBudgetHours),
+      billingMethod: infoBillingMethod,
+      billingRate: infoBillingRate === '' ? null : parseFloat(infoBillingRate),
+      tags: infoTags.trim() || null,
+      isTemplate: infoIsTemplate,
+      taskLayout: infoTaskLayout,
     });
   };
 
@@ -531,53 +594,34 @@ export default function ProjectDetailsPage() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col text-slate-100">
       {/* Header */}
-      <header className="border-b border-slate-900 bg-slate-900/40 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/projects"
-              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-lg transition-all"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div className="flex flex-col">
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Project Module</span>
-              <span className="font-bold text-base text-slate-100 flex items-center gap-2">
-                {project.name}
-                <span className="text-xs font-mono px-2 py-0.5 bg-slate-950 border border-slate-800 rounded text-indigo-400 font-normal">
-                  {project.projectCode}
-                </span>
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 sm:gap-6">
-            <NotificationBell />
-            <Link
-              href="/settings/notifications"
-              className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all duration-150 flex items-center justify-center"
-              title="Notification Preferences"
-            >
-              <Sliders className="w-4 h-4" />
-            </Link>
-            <div className="hidden md:flex flex-col items-end gap-1">
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Project Progress
-                <span className="font-mono text-indigo-400">{project.progress ?? 0}%</span>
-              </div>
-              <div className="w-28 h-1.5 bg-slate-950 border border-slate-900 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
-                  style={{ width: `${project.progress ?? 0}%` }}
-                />
-              </div>
-            </div>
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(project.status)}`}>
-              {project.status}
+      <Header
+        title={
+          <span className="font-bold text-base text-slate-100 flex items-center gap-2">
+            {project.name}
+            <span className="text-xs font-mono px-2 py-0.5 bg-slate-950 border border-slate-800 rounded text-indigo-400 font-normal">
+              {project.projectCode}
             </span>
+          </span>
+        }
+        subtitle="Project Module"
+        backHref="/projects"
+      >
+        <div className="hidden md:flex flex-col items-end gap-1">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            Project Progress
+            <span className="font-mono text-indigo-400">{project.progress ?? 0}%</span>
+          </div>
+          <div className="w-28 h-1.5 bg-slate-950 border border-slate-900 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
+              style={{ width: `${project.progress ?? 0}%` }}
+            />
           </div>
         </div>
-      </header>
+        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(project.status)}`}>
+          {project.status}
+        </span>
+      </Header>
 
       {/* Main Grid Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -798,6 +842,137 @@ export default function ProjectDetailsPage() {
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Currency</label>
+                        <select
+                          value={infoCurrency}
+                          onChange={(e) => setInfoCurrency(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                        >
+                          <option value="USD">USD ($)</option>
+                          <option value="EUR">EUR (€)</option>
+                          <option value="GBP">GBP (£)</option>
+                          <option value="INR">INR (₹)</option>
+                          <option value="CAD">CAD (CA$)</option>
+                          <option value="AUD">AUD (A$)</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Task Layout</label>
+                        <select
+                          value={infoTaskLayout}
+                          onChange={(e) => setInfoTaskLayout(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                        >
+                          <option value="STANDARD">Standard Layout</option>
+                          <option value="KANBAN">Kanban Board Layout</option>
+                          <option value="LIST">List View Layout</option>
+                          <option value="GANTT">Gantt Timeline Layout</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Budget Type</label>
+                        <select
+                          value={infoBudgetType}
+                          onChange={(e) => setInfoBudgetType(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                        >
+                          <option value="NONE">None</option>
+                          <option value="FIXED_COST">Fixed Project Amount</option>
+                          <option value="BASED_ON_PROJECT_HOURS">Based on Project Hours</option>
+                          <option value="BASED_ON_STAFF_HOURS">Based on Staff Hours</option>
+                          <option value="BASED_ON_TASK_HOURS">Based on Task Hours</option>
+                        </select>
+                      </div>
+
+                      {infoBudgetType === 'FIXED_COST' ? (
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Budget Amount</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={infoBudgetAmount}
+                            onChange={(e) => setInfoBudgetAmount(e.target.value)}
+                            placeholder="50000"
+                            className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      ) : (infoBudgetType === 'BASED_ON_PROJECT_HOURS' || infoBudgetType === 'BASED_ON_STAFF_HOURS' || infoBudgetType === 'BASED_ON_TASK_HOURS') ? (
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Budget Hours</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={infoBudgetHours}
+                            onChange={(e) => setInfoBudgetHours(e.target.value)}
+                            placeholder="120"
+                            className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      ) : <div />}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Billing Method</label>
+                        <select
+                          value={infoBillingMethod}
+                          onChange={(e) => setInfoBillingMethod(e.target.value)}
+                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                        >
+                          <option value="NONE">None</option>
+                          <option value="FIXED_RATE">Fixed Project Rate</option>
+                          <option value="PROJECT_HOURLY_RATE">Based on Project Hourly Rate</option>
+                          <option value="STAFF_HOURLY_RATE">Based on Staff Hourly Rate</option>
+                          <option value="TASK_HOURLY_RATE">Based on Task Hourly Rate</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Billing Rate / Hour</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={infoBillingRate}
+                          onChange={(e) => setInfoBillingRate(e.target.value)}
+                          placeholder="75"
+                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Tags (comma separated)</label>
+                      <input
+                        type="text"
+                        value={infoTags}
+                        onChange={(e) => setInfoTags(e.target.value)}
+                        placeholder="Internal, High Priority, Q4"
+                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2">
+                      <input
+                        type="checkbox"
+                        id="infoIsTemplate"
+                        checked={infoIsTemplate}
+                        onChange={(e) => setInfoIsTemplate(e.target.checked)}
+                        className="w-4 h-4 rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-0"
+                      />
+                      <label htmlFor="infoIsTemplate" className="text-xs text-slate-300 font-semibold cursor-pointer">
+                        Mark as Project Template (Baseline for new projects)
+                      </label>
+                    </div>
+
                     <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-900">
                       <button
                         type="button"
@@ -853,7 +1028,7 @@ export default function ProjectDetailsPage() {
                         <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Start Date</span>
                         <p className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
                           <Calendar className="w-4 h-4 text-slate-500" />
-                          {project.startDate ? new Date(project.startDate).toLocaleDateString() : 'Not scheduled'}
+                          {formatDate(project.startDate)}
                         </p>
                       </div>
 
@@ -861,7 +1036,7 @@ export default function ProjectDetailsPage() {
                         <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">End Date</span>
                         <p className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
                           <Calendar className="w-4 h-4 text-slate-500" />
-                          {project.endDate ? new Date(project.endDate).toLocaleDateString() : 'Not scheduled'}
+                          {formatDate(project.endDate)}
                         </p>
                       </div>
                     </div>
@@ -961,8 +1136,145 @@ export default function ProjectDetailsPage() {
               </article>
             </div>
 
-            {/* Right Column: Danger Zone */}
+            {/* Right Column: Financial Overview, Project Attributes, Danger Zone */}
             <div className="space-y-8">
+              {/* Financial & Budget Widget */}
+              <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 space-y-6">
+                <div className="border-b border-slate-900 pb-4 flex items-center justify-between">
+                  <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
+                    <Coins className="w-4.5 h-4.5 text-emerald-400" />
+                    Budget & Billing
+                  </h3>
+                  <span className="text-xs font-mono font-bold text-emerald-400 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded">
+                    {project.currency || 'USD'}
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Budget Progress */}
+                  <div className="p-4 bg-slate-950/40 border border-slate-900 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400 font-medium">Budget Mode</span>
+                      <span className="font-bold text-slate-200">{formatEnumLabel(project.budgetType)}</span>
+                    </div>
+
+                    {project.budgetType === 'FIXED_COST' && project.budgetAmount && (
+                      <div className="space-y-2 pt-1 border-t border-slate-900">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-400">Spent / Budget</span>
+                          <span className="font-mono font-bold text-emerald-400">
+                            {getCurrencySymbol(project.currency)}{project.spentAmount?.toLocaleString() || 0} / {getCurrencySymbol(project.currency)}{project.budgetAmount?.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-850">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              (project.spentAmount || 0) > project.budgetAmount
+                                ? 'bg-rose-500'
+                                : 'bg-emerald-500'
+                            }`}
+                            style={{
+                              width: `${Math.min(100, Math.round(((project.spentAmount || 0) / project.budgetAmount) * 100))}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {(project.budgetType === 'BASED_ON_PROJECT_HOURS' || project.budgetType === 'BASED_ON_STAFF_HOURS' || project.budgetType === 'BASED_ON_TASK_HOURS') && project.budgetHours && (
+                      <div className="space-y-2 pt-1 border-t border-slate-900">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-400">Logged / Allocated</span>
+                          <span className="font-mono font-bold text-indigo-400">
+                            {project.loggedHours || 0}h / {project.budgetHours}h
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-850">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              (project.loggedHours || 0) > project.budgetHours
+                                ? 'bg-rose-500'
+                                : 'bg-indigo-500'
+                            }`}
+                            style={{
+                              width: `${Math.min(100, Math.round(((project.loggedHours || 0) / project.budgetHours) * 100))}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {(!project.budgetType || project.budgetType === 'NONE') && (
+                      <p className="text-xs text-slate-500 italic">No budget limit set for this project.</p>
+                    )}
+                  </div>
+
+                  {/* Billing Method */}
+                  <div className="p-4 bg-slate-950/40 border border-slate-900 rounded-xl space-y-2 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 font-medium">Billing Scheme</span>
+                      <span className="font-bold text-slate-200">{formatEnumLabel(project.billingMethod)}</span>
+                    </div>
+                    {project.billingRate !== null && project.billingRate !== undefined && (
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-900">
+                        <span className="text-slate-400 font-medium">Billing Rate</span>
+                        <span className="font-mono font-bold text-slate-200">
+                          {getCurrencySymbol(project.currency)}{project.billingRate}/hr
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </article>
+
+              {/* Project Attributes & Tags Widget */}
+              <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 space-y-6">
+                <div className="border-b border-slate-900 pb-4">
+                  <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
+                    <Tag className="w-4.5 h-4.5 text-indigo-400" />
+                    Layout & Tags
+                  </h3>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-slate-950/40 border border-slate-900 rounded-xl text-xs">
+                    <span className="text-slate-400">Task Layout</span>
+                    <span className="font-bold text-indigo-300 capitalize">{project.taskLayout?.toLowerCase() || 'Standard'}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-slate-950/40 border border-slate-900 rounded-xl text-xs">
+                    <span className="text-slate-400">Project Type</span>
+                    <span className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase border ${
+                      project.isTemplate
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        : 'bg-slate-800 text-slate-300 border-slate-700'
+                    }`}>
+                      {project.isTemplate ? 'Template Baseline' : 'Standard Project'}
+                    </span>
+                  </div>
+
+                  {/* Tags */}
+                  <div className="space-y-2 pt-2 border-t border-slate-900">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Tags</span>
+                    {project.tags && project.tags.trim() ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {project.tags.split(',').map((tag: string, idx: number) => (
+                          <span
+                            key={idx}
+                            className="px-2.5 py-1 bg-slate-950 border border-slate-850 rounded-lg text-xs font-medium text-indigo-300"
+                          >
+                            #{tag.trim()}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500 italic">No tags assigned.</p>
+                    )}
+                  </div>
+                </div>
+              </article>
+
+              {/* Danger Zone */}
               {canArchive && (
                 <article className="border border-rose-900/40 bg-rose-950/5 rounded-2xl p-6 space-y-4">
                   <div className="space-y-1">
@@ -1089,144 +1401,199 @@ export default function ProjectDetailsPage() {
               )}
             </div>
 
-            {/* Conditionally Render Board vs List */}
-            {viewMode === 'board' ? (
-              isLoadingBoard ? (
-                <div className="py-12 flex justify-center">
-                  <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+            {/* Check if project has no tasks at all vs filter results */}
+            {(!tasks || tasks.length === 0) && !isLoadingTasks ? (
+              <div className="bg-slate-900/30 border border-slate-900 rounded-3xl p-10 md:p-14 text-center space-y-6 max-w-2xl mx-auto my-6 relative overflow-hidden">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
+                
+                {/* Visual Icon Illustration */}
+                <div className="w-20 h-20 mx-auto bg-gradient-to-tr from-indigo-600/20 to-blue-500/20 border border-indigo-500/30 rounded-3xl flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-500/10">
+                  <ListTodo className="w-10 h-10 text-indigo-400" />
                 </div>
-              ) : (
-                <KanbanBoard
-                  projectId={projectId}
-                  projectCode={project.projectCode}
-                  boardData={{
-                    todo: boardData?.todo?.filter((t: any) => {
-                      const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
-                      const matchType = filterType === 'ALL' || t.type === filterType;
-                      return matchPriority && matchType;
-                    }) || [],
-                    inProgress: boardData?.inProgress?.filter((t: any) => {
-                      const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
-                      const matchType = filterType === 'ALL' || t.type === filterType;
-                      return matchPriority && matchType;
-                    }) || [],
-                    review: boardData?.review?.filter((t: any) => {
-                      const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
-                      const matchType = filterType === 'ALL' || t.type === filterType;
-                      return matchPriority && matchType;
-                    }) || [],
-                    done: boardData?.done?.filter((t: any) => {
-                      const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
-                      const matchType = filterType === 'ALL' || t.type === filterType;
-                      return matchPriority && matchType;
-                    }) || [],
-                    blocked: boardData?.blocked?.filter((t: any) => {
-                      const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
-                      const matchType = filterType === 'ALL' || t.type === filterType;
-                      return matchPriority && matchType;
-                    }) || [],
-                  }}
-                  isReadOnly={isArchived || !hasPermission('EDIT_TASK')}
-                  onCardClick={(taskId) => {
-                    setSelectedTaskId(taskId);
-                    setIsTaskDrawerOpen(true);
-                  }}
-                  onReorder={async (taskId, targetStatus, targetPosition) => {
-                    try {
-                      await reorderTaskMutation.mutateAsync({ taskId, status: targetStatus, position: targetPosition });
-                    } catch (e) {
-                      // Already handled in onError
-                    }
-                  }}
-                />
-              )
-            ) : (
-              /* Tasks list grid */
-              isLoadingTasks ? (
-                <div className="py-12 flex justify-center">
-                  <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-                </div>
-              ) : filteredTasks.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredTasks.map((t: any) => (
-                    <div
-                      key={t.id}
-                      onClick={() => {
-                        setSelectedTaskId(t.id);
-                        setIsTaskDrawerOpen(true);
-                      }}
-                      className="bg-slate-900/30 border border-slate-900 hover:border-slate-800 hover:bg-slate-900/50 rounded-2xl p-5 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 group relative overflow-hidden"
-                    >
-                      <div className="absolute top-0 right-0 w-[20%] h-[20%] rounded-full bg-indigo-500/[0.01] group-hover:bg-indigo-500/[0.03] blur-[25px] transition-all" />
 
-                      {/* Top Row: Code, Type Icon, Priority */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-950 border border-slate-800/80 rounded text-slate-400 font-semibold group-hover:text-indigo-400 transition-colors">
-                            {project.projectCode}-{t.taskNumber}
+                <div className="space-y-2 max-w-md mx-auto">
+                  <h3 className="text-xl font-extrabold text-slate-100">No tasks created yet</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Tasks are the building blocks of a project and can be grouped into task lists. Once you've been assigned tasks or created your own, you'll be able to view and manage them here.
+                  </p>
+                </div>
+
+                {/* Action Buttons: Add Milestone, Add Task, Add Issue */}
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
+                  {hasPermission('CREATE_MILESTONE') && (
+                    <button
+                      onClick={() => {
+                        setActiveTab('milestones');
+                        setAutoOpenCreateMilestoneModal(true);
+                      }}
+                      className="px-5 py-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-200 rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-2 cursor-pointer shadow-lg"
+                    >
+                      <Flag className="w-4 h-4 text-amber-400" />
+                      <span>Add Milestone</span>
+                    </button>
+                  )}
+
+                  {canCreateTask && (
+                    <button
+                      onClick={() => setIsCreateTaskModalOpen(true)}
+                      className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/20"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Task</span>
+                    </button>
+                  )}
+
+                  {project.settings?.allowIssueTracking !== false && (
+                    <button
+                      onClick={() => setActiveTab('issues')}
+                      className="px-5 py-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-200 rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-2 cursor-pointer shadow-lg"
+                    >
+                      <Bug className="w-4 h-4 text-rose-400" />
+                      <span>Add Issue</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Conditionally Render Board vs List */
+              viewMode === 'board' ? (
+                isLoadingBoard ? (
+                  <div className="py-12 flex justify-center">
+                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                  </div>
+                ) : (
+                  <KanbanBoard
+                    projectId={projectId}
+                    projectCode={project.projectCode}
+                    boardData={{
+                      todo: boardData?.todo?.filter((t: any) => {
+                        const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
+                        const matchType = filterType === 'ALL' || t.type === filterType;
+                        return matchPriority && matchType;
+                      }) || [],
+                      inProgress: boardData?.inProgress?.filter((t: any) => {
+                        const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
+                        const matchType = filterType === 'ALL' || t.type === filterType;
+                        return matchPriority && matchType;
+                      }) || [],
+                      review: boardData?.review?.filter((t: any) => {
+                        const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
+                        const matchType = filterType === 'ALL' || t.type === filterType;
+                        return matchPriority && matchType;
+                      }) || [],
+                      done: boardData?.done?.filter((t: any) => {
+                        const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
+                        const matchType = filterType === 'ALL' || t.type === filterType;
+                        return matchPriority && matchType;
+                      }) || [],
+                      blocked: boardData?.blocked?.filter((t: any) => {
+                        const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
+                        const matchType = filterType === 'ALL' || t.type === filterType;
+                        return matchPriority && matchType;
+                      }) || [],
+                    }}
+                    isReadOnly={isArchived || !hasPermission('EDIT_TASK')}
+                    onCardClick={(taskId) => {
+                      setSelectedTaskId(taskId);
+                      setIsTaskDrawerOpen(true);
+                    }}
+                    onReorder={async (taskId, targetStatus, targetPosition) => {
+                      try {
+                        await reorderTaskMutation.mutateAsync({ taskId, status: targetStatus, position: targetPosition });
+                      } catch (e) {
+                        // Already handled in onError
+                      }
+                    }}
+                  />
+                )
+              ) : (
+                /* Tasks list grid */
+                isLoadingTasks ? (
+                  <div className="py-12 flex justify-center">
+                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                  </div>
+                ) : filteredTasks.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredTasks.map((t: any) => (
+                      <div
+                        key={t.id}
+                        onClick={() => {
+                          setSelectedTaskId(t.id);
+                          setIsTaskDrawerOpen(true);
+                        }}
+                        className="bg-slate-900/30 border border-slate-900 hover:border-slate-800 hover:bg-slate-900/50 rounded-2xl p-5 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 group relative overflow-hidden"
+                      >
+                        <div className="absolute top-0 right-0 w-[20%] h-[20%] rounded-full bg-indigo-500/[0.01] group-hover:bg-indigo-500/[0.03] blur-[25px] transition-all" />
+
+                        {/* Top Row: Code, Type Icon, Priority */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-950 border border-slate-800/80 rounded text-slate-400 font-semibold group-hover:text-indigo-400 transition-colors">
+                              {project.projectCode}-{t.taskNumber}
+                            </span>
+                            <div className="p-1 bg-slate-950/40 border border-slate-800/50 rounded" title={t.type}>
+                              {getTypeIcon(t.type)}
+                            </div>
+                          </div>
+
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-bold border uppercase ${getPriorityColor(t.priority)}`}>
+                            {t.priority}
                           </span>
-                          <div className="p-1 bg-slate-950/40 border border-slate-800/50 rounded" title={t.type}>
-                            {getTypeIcon(t.type)}
+                        </div>
+
+                        {/* Middle Row: Title */}
+                        <div className="space-y-1">
+                          <h4 className="font-extrabold text-xs text-slate-100 leading-snug group-hover:text-indigo-300 transition-colors line-clamp-2">
+                            {t.title}
+                          </h4>
+                          {t.description && (
+                            <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">
+                              {t.description}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Bottom Row: Status badge, Assignee initials/name */}
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-900/80 text-[10px]">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase tracking-wider ${getStatusColor(t.status)}`}>
+                            {t.status.replace('_', ' ')}
+                          </span>
+
+                          <div className="flex items-center gap-2 min-w-0">
+                            {t.estimatedHours !== null && (
+                              <div className="flex items-center gap-1 text-[10px] text-slate-500 mr-1.5" title="Estimation">
+                                <Clock className="w-3.5 h-3.5 text-slate-650" />
+                                <span>{t.estimatedHours}h</span>
+                              </div>
+                            )}
+                            
+                            {t.assignee ? (
+                              <div className="flex items-center gap-1.5 min-w-0" title={`Assignee: ${t.assignee.firstName || t.assignee.email}`}>
+                                <div className="w-5.5 h-5.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 font-bold flex items-center justify-center shrink-0 text-[8px] uppercase">
+                                  {t.assignee.firstName ? t.assignee.firstName[0] : t.assignee.email[0]}
+                                </div>
+                                <span className="text-slate-400 font-semibold truncate max-w-[80px]">
+                                  {t.assignee.firstName || t.assignee.email.split('@')[0]}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 text-slate-600 italic">
+                                <User className="w-3.5 h-3.5 text-slate-700" />
+                                <span>Unassigned</span>
+                              </div>
+                            )}
                           </div>
                         </div>
-
-                        <span className={`px-2 py-0.5 rounded text-[8px] font-bold border uppercase ${getPriorityColor(t.priority)}`}>
-                          {t.priority}
-                        </span>
                       </div>
-
-                      {/* Middle Row: Title */}
-                      <div className="space-y-1">
-                        <h4 className="font-extrabold text-xs text-slate-100 leading-snug group-hover:text-indigo-300 transition-colors line-clamp-2">
-                          {t.title}
-                        </h4>
-                        {t.description && (
-                          <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">
-                            {t.description}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Bottom Row: Status badge, Assignee initials/name */}
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-900/80 text-[10px]">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase tracking-wider ${getStatusColor(t.status)}`}>
-                          {t.status.replace('_', ' ')}
-                        </span>
-
-                        <div className="flex items-center gap-2 min-w-0">
-                          {t.estimatedHours !== null && (
-                            <div className="flex items-center gap-1 text-[10px] text-slate-500 mr-1.5" title="Estimation">
-                              <Clock className="w-3.5 h-3.5 text-slate-650" />
-                              <span>{t.estimatedHours}h</span>
-                            </div>
-                          )}
-                          
-                          {t.assignee ? (
-                            <div className="flex items-center gap-1.5 min-w-0" title={`Assignee: ${t.assignee.firstName || t.assignee.email}`}>
-                              <div className="w-5.5 h-5.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 font-bold flex items-center justify-center shrink-0 text-[8px] uppercase">
-                                {t.assignee.firstName ? t.assignee.firstName[0] : t.assignee.email[0]}
-                              </div>
-                              <span className="text-slate-400 font-semibold truncate max-w-[80px]">
-                                {t.assignee.firstName || t.assignee.email.split('@')[0]}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1 text-slate-600 italic">
-                              <User className="w-3.5 h-3.5 text-slate-700" />
-                              <span>Unassigned</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-16 bg-slate-900/10 border border-dashed border-slate-800 rounded-2xl">
-                  <ListTodo className="w-12 h-12 text-slate-500 mx-auto mb-3" />
-                  <h3 className="text-sm font-bold text-slate-200">No tasks found</h3>
-                  <p className="text-xs text-slate-500 mt-1">Try adjusting your filters or create a new task.</p>
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-16 bg-slate-900/10 border border-dashed border-slate-800 rounded-2xl">
+                    <ListTodo className="w-12 h-12 text-slate-500 mx-auto mb-3" />
+                    <h3 className="text-sm font-bold text-slate-200">No tasks match active filters</h3>
+                    <p className="text-xs text-slate-500 mt-1">Try resetting your status, priority, or type filters.</p>
+                  </div>
+                )
               )
             )}
           </div>
@@ -1362,7 +1729,12 @@ export default function ProjectDetailsPage() {
         )}
 
         {activeTab === 'milestones' && (
-          <MilestonesTab projectId={projectId} />
+          <MilestonesTab
+            projectId={projectId}
+            onOpenCreateTaskModal={handleOpenCreateTaskModalWithMilestone}
+            autoOpenCreateModal={autoOpenCreateMilestoneModal}
+            onResetAutoOpenCreateModal={() => setAutoOpenCreateMilestoneModal(false)}
+          />
         )}
 
         {activeTab === 'issues' && (

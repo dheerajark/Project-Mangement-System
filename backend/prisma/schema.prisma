@@ -144,6 +144,10 @@ model AuditLog {
   taskId         String?
   createdAt      DateTime     @default(now())
 
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([createdAt])
   @@map("audit_logs")
 }
 
@@ -248,31 +252,63 @@ enum ProjectVisibility {
   ORGANIZATION
 }
 
+enum ProjectBudgetType {
+  NONE
+  FIXED_COST
+  BASED_ON_PROJECT_HOURS
+  BASED_ON_STAFF_HOURS
+  BASED_ON_TASK_HOURS
+}
+
+enum ProjectBillingMethod {
+  NONE
+  FIXED_RATE
+  PROJECT_HOURLY_RATE
+  STAFF_HOURLY_RATE
+  TASK_HOURLY_RATE
+}
+
+enum TaskLayoutType {
+  STANDARD
+  KANBAN
+  LIST
+  GANTT
+}
+
 model Project {
-  id             String            @id @default(uuid())
+  id             String               @id @default(uuid())
   name           String
   description    String?
-  projectCode    String            @unique
+  projectCode    String               @unique
   startDate      DateTime?
   endDate        DateTime?
-  status         ProjectStatus     @default(ACTIVE)
-  visibility     ProjectVisibility @default(PRIVATE)
+  status         ProjectStatus        @default(ACTIVE)
+  visibility     ProjectVisibility    @default(PRIVATE)
+  currency       String               @default("USD")
+  budgetType     ProjectBudgetType    @default(NONE)
+  budgetAmount   Float?
+  budgetHours    Float?
+  billingMethod  ProjectBillingMethod @default(NONE)
+  billingRate    Float?
+  tags           String?
+  isTemplate     Boolean              @default(false)
+  taskLayout     TaskLayoutType       @default(STANDARD)
   organizationId String
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   ownerId        String
-  owner          User              @relation("ProjectOwnerRelation", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner          User                 @relation("ProjectOwnerRelation", fields: [ownerId], references: [id], onDelete: Cascade)
   settings       ProjectSettings?
   members        ProjectMember[]
-  nextTaskNumber  Int               @default(1)
-  nextIssueNumber Int               @default(1)
+  nextTaskNumber  Int                  @default(1)
+  nextIssueNumber Int                  @default(1)
   tasks           Task[]
   timeEntries     TimeEntry[]
   milestones      Milestone[]
   activities      ProjectActivity[]
   issues          Issue[]
   notifications   Notification[]
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
   deletedAt       DateTime?
 
   @@map("projects")
@@ -369,6 +405,12 @@ model Task {
   notifications  Notification[]
 
   @@unique([projectId, taskNumber])
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([milestoneId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([deletedAt])
   @@map("tasks")
 }
 
@@ -517,6 +559,13 @@ model TimeEntry {
   updatedAt      DateTime        @updatedAt
   deletedAt      DateTime?
 
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([userId])
+  @@index([timesheetId])
+  @@index([loggedAt])
+  @@index([deletedAt])
   @@map("time_entries")
 }
 
@@ -647,6 +696,12 @@ model Issue {
   deletedAt   DateTime?
 
   @@unique([projectId, issueNumber])
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([deletedAt])
   @@map("issues")
 }
 
@@ -730,6 +785,14 @@ model Notification {
   updatedAt      DateTime         @updatedAt
   deletedAt      DateTime?
 
+  @@index([userId])
+  @@index([isRead])
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([issueId])
+  @@index([createdAt])
+  @@index([deletedAt])
   @@map("notifications")
 }
 

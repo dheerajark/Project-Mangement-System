@@ -28,13 +28,15 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import NotificationBell from '@/components/notification-bell';
+import Header from '@/components/header';
+import { useFormatDate } from '@/hooks/useFormatDate';
 
 // Collapsible permissions categories mapping
 const PERMISSION_GROUPS: Record<string, string[]> = {
   'Project Permissions': ['CREATE_PROJECT', 'VIEW_PROJECT', 'EDIT_PROJECT', 'ARCHIVE_PROJECT'],
-  'Task Permissions': ['CREATE_TASK', 'VIEW_TASK', 'EDIT_TASK', 'ARCHIVE_TASK'],
-  'Issue Permissions': ['CREATE_ISSUE', 'VIEW_ISSUE', 'EDIT_ISSUE', 'ARCHIVE_ISSUE', 'COMMENT_ISSUE'],
-  'Milestone Permissions': ['CREATE_MILESTONE', 'VIEW_MILESTONE', 'EDIT_MILESTONE', 'ARCHIVE_MILESTONE'],
+  'Task Permissions': ['CREATE_TASK', 'VIEW_TASK', 'VIEW_ALL_TASKS', 'EDIT_TASK', 'ARCHIVE_TASK'],
+  'Issue Permissions': ['CREATE_ISSUE', 'VIEW_ISSUE', 'VIEW_ALL_ISSUES', 'EDIT_ISSUE', 'ARCHIVE_ISSUE', 'COMMENT_ISSUE'],
+  'Milestone Permissions': ['CREATE_MILESTONE', 'VIEW_MILESTONE', 'VIEW_ALL_MILESTONES', 'EDIT_MILESTONE', 'ARCHIVE_MILESTONE'],
   'Reports Permissions': ['VIEW_REPORT'],
   'Time Tracking Permissions': ['LOG_TIME_ENTRY', 'ARCHIVE_TIME_ENTRY', 'VIEW_TIME_ENTRY', 'SUBMIT_TIMESHEET', 'APPROVE_TIMESHEET'],
   'Administration Permissions': ['MANAGE_USERS', 'INVITE_MEMBERS'],
@@ -44,6 +46,7 @@ export default function SettingsPage() {
   const { user, isAuthenticated, isLoading, hasPermission } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const formatDate = useFormatDate();
   const [activeTab, setActiveTab] = useState<'general' | 'members' | 'invitations' | 'audit' | 'profiles'>('general');
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
 
@@ -68,7 +71,8 @@ export default function SettingsPage() {
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   // Settings Form State
-  const [theme, setTheme] = useState('dark');
+  const [appMode, setAppMode] = useState<'dark' | 'light'>('dark');
+  const [accentColor, setAccentColor] = useState<'indigo' | 'emerald' | 'amber' | 'rose' | 'slate'>('indigo');
   const [allowedDomains, setAllowedDomains] = useState('');
   const [timezone, setTimezone] = useState('UTC');
   const [dateFormat, setDateFormat] = useState('YYYY-MM-DD');
@@ -152,7 +156,10 @@ export default function SettingsPage() {
   // Populate settings form when data is loaded
   useEffect(() => {
     if (settings) {
-      setTheme(settings.theme || 'dark');
+      const themeVal = settings.theme || 'light';
+      const [mode, accent] = themeVal.includes('-') ? themeVal.split('-') : [themeVal, 'indigo'];
+      setAppMode(mode as any);
+      setAccentColor(accent as any);
       setAllowedDomains(settings.allowedEmailDomains || '');
       setTimezone(settings.timezone || 'UTC');
       setDateFormat(settings.dateFormat || 'YYYY-MM-DD');
@@ -160,6 +167,8 @@ export default function SettingsPage() {
       setCurrency(settings.currency || 'USD');
     }
   }, [settings]);
+
+
 
   // Mutations
   const updateSettingsMutation = useMutation({
@@ -301,7 +310,7 @@ export default function SettingsPage() {
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     updateSettingsMutation.mutate({
-      theme,
+      theme: `${appMode}-${accentColor}`,
       allowedEmailDomains: allowedDomains || null,
       timezone,
       dateFormat,
@@ -363,35 +372,12 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col text-slate-100">
       {/* Header */}
-      <header className="border-b border-slate-900 bg-slate-900/40 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard"
-              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-lg transition-all"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <span className="font-bold text-lg bg-gradient-to-r from-indigo-400 to-blue-400 bg-clip-text text-transparent">
-              Organization Control Panel
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <NotificationBell />
-            <Link
-              href="/settings/notifications"
-              className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all duration-150 flex items-center justify-center"
-              title="Notification Preferences"
-            >
-              <Sliders className="w-4 h-4" />
-            </Link>
-            <div className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold rounded-full">
-              Admin Settings
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header
+        title="Organization Control Panel"
+        subtitle="Admin Panel"
+        backHref="/dashboard"
+        activeNav="settings"
+      />
 
       {/* Content Layout */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col lg:flex-row gap-8">
@@ -478,14 +464,29 @@ export default function SettingsPage() {
                 <form onSubmit={handleSaveSettings} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Default Theme</label>
+                      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Interface Mode</label>
                       <select
-                        value={theme}
-                        onChange={(e) => setTheme(e.target.value)}
+                        value={appMode}
+                        onChange={(e) => setAppMode(e.target.value as any)}
                         className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm"
                       >
-                        <option value="dark">Dark Theme</option>
-                        <option value="light">Light Theme</option>
+                        <option value="dark">Dark Mode</option>
+                        <option value="light">Light Mode</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Accent Color Theme</label>
+                      <select
+                        value={accentColor}
+                        onChange={(e) => setAccentColor(e.target.value as any)}
+                        className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm"
+                      >
+                        <option value="indigo">Indigo / Blue (Default)</option>
+                        <option value="emerald">Emerald / Green (Eye Care / Soothing)</option>
+                        <option value="amber">Amber / Orange (Warm)</option>
+                        <option value="rose">Rose / Red (Vibrant)</option>
+                        <option value="slate">Slate / Neutral (Monochrome)</option>
                       </select>
                     </div>
 
@@ -805,7 +806,7 @@ export default function SettingsPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 text-xs text-slate-500">
-                              {new Date(inv.expiresAt).toLocaleDateString()}
+                              {formatDate(inv.expiresAt)}
                             </td>
                             <td className="px-6 py-4 text-right">
                               {inv.status === 'PENDING' && (

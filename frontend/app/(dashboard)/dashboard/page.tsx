@@ -25,11 +25,14 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import NotificationBell from '@/components/notification-bell';
+import Header from '@/components/header';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { useFormatDate } from '@/hooks/useFormatDate';
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const router = useRouter();
+  const formatDate = useFormatDate();
   const [mounted, setMounted] = useState(false);
   const [range, setRange] = useState<string>('14d');
   const [startDate, setStartDate] = useState<string>('');
@@ -87,10 +90,10 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col text-slate-100">
+    <div className="min-h-screen bg-background flex flex-col text-foreground">
       {/* Top Navbar */}
-      <header className="border-b border-slate-900 bg-slate-900/40 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <Header
+        title={
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 bg-gradient-to-tr from-indigo-500 to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
               <FolderKanban className="w-5 h-5 text-white" />
@@ -99,42 +102,14 @@ export default function DashboardPage() {
               PMS Portal
             </span>
           </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-900/80 border border-slate-800 rounded-lg">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs text-slate-300 font-medium">Session Active</span>
-            </div>
-            <NotificationBell />
-            <Link
-              href="/settings/notifications"
-              className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all duration-150 flex items-center gap-2 text-sm"
-              title="Notification Preferences"
-            >
-              <Sliders className="w-4 h-4" />
-              <span className="hidden sm:inline">Preferences</span>
-            </Link>
-            {user && user.permissions.includes('MANAGE_USERS') && (
-              <Link
-                href="/settings"
-                className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all duration-150 flex items-center gap-2 text-sm"
-                title="Organization Settings"
-              >
-                <Settings className="w-4 h-4" />
-                <span className="hidden sm:inline">Settings</span>
-              </Link>
-            )}
-            <button
-              onClick={handleLogout}
-              className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-150 flex items-center gap-2 text-sm"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Logout</span>
-            </button>
-          </div>
+        }
+        activeNav="dashboard"
+      >
+        <div className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-900/80 border border-slate-800 rounded-lg">
+          <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-xs text-slate-300 font-medium">Session Active</span>
         </div>
-      </header>
+      </Header>
 
       {/* Main Grid Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -218,10 +193,29 @@ export default function DashboardPage() {
         </div>
 
         {isLoadingReport ? (
-          <div className="py-24 flex justify-center">
-            <div className="text-center space-y-4">
-              <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto" />
-              <p className="text-xs text-slate-500">Compiling your workspace metrics...</p>
+          <div className="space-y-8 animate-pulse">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-slate-900/40 border border-slate-900 rounded-2xl p-5 md:p-6 h-32 flex flex-col justify-between">
+                  <div className="h-3 bg-slate-800 rounded w-2/3"></div>
+                  <div className="h-7 bg-slate-800 rounded w-1/3 mt-3"></div>
+                  <div className="h-2 bg-slate-800/60 rounded w-1/2 mt-2"></div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 bg-slate-900/40 border border-slate-900 rounded-2xl p-6 h-72 flex flex-col justify-between">
+                <div className="h-4 bg-slate-800 rounded w-1/3 mb-4"></div>
+                <div className="h-48 bg-slate-850/40 rounded-xl"></div>
+              </div>
+              <div className="bg-slate-900/40 border border-slate-900 rounded-2xl p-6 h-72 flex flex-col justify-between">
+                <div className="h-4 bg-slate-800 rounded w-1/2 mb-4"></div>
+                <div className="space-y-3">
+                  <div className="h-8 bg-slate-850/50 rounded-lg"></div>
+                  <div className="h-8 bg-slate-850/50 rounded-lg"></div>
+                  <div className="h-8 bg-slate-850/50 rounded-lg"></div>
+                </div>
+              </div>
             </div>
           </div>
         ) : error || !report ? (
@@ -454,7 +448,7 @@ export default function DashboardPage() {
                             {rl.hours.toFixed(1)} hrs
                           </span>
                           <p className="text-[8.5px] text-slate-500 mt-1">
-                            {new Date(rl.loggedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            {formatDate(rl.loggedAt)}
                           </p>
                         </div>
                       </div>

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import { useAuth } from '@/hooks/useAuth';
+import { useFormatDate } from '@/hooks/useFormatDate';
 import {
   X,
   Eye,
@@ -42,6 +43,7 @@ export default function TaskDetailDrawer({
 }: TaskDetailDrawerProps) {
   const { user, hasPermission } = useAuth();
   const queryClient = useQueryClient();
+  const formatDate = useFormatDate();
 
   // Form Editing State
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -730,7 +732,7 @@ export default function TaskDetailDrawer({
                                     {log.user.firstName ? `${log.user.firstName} ${log.user.lastName || ''}` : log.user.email}
                                   </span>
                                   <span className="text-[10px] text-slate-505">
-                                    {new Date(log.loggedAt).toLocaleDateString()}
+                                    {formatDate(log.loggedAt)}
                                   </span>
                                 </div>
                                 <div className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] truncate" title={log.description}>
@@ -1032,11 +1034,11 @@ export default function TaskDetailDrawer({
                     </span>
                   </div>
                   <div>
-                    Created: <span className="font-semibold text-slate-400">{new Date(task.createdAt).toLocaleDateString()}</span>
+                    Created: <span className="font-semibold text-slate-400">{formatDate(task.createdAt)}</span>
                   </div>
                   <div>
                     Last Updated:{' '}
-                    <span className="font-semibold text-slate-400">{new Date(task.updatedAt).toLocaleDateString()}</span>
+                    <span className="font-semibold text-slate-400">{formatDate(task.updatedAt)}</span>
                   </div>
                 </div>
 
@@ -1090,7 +1092,7 @@ export default function TaskDetailDrawer({
                             <span className="text-slate-450">{descriptionText}</span>
                           </div>
                           <span className="text-[10px] text-slate-500 shrink-0">
-                            {new Date(act.createdAt).toLocaleDateString()}
+                            {formatDate(act.createdAt)}
                           </span>
                         </div>
                       </li>

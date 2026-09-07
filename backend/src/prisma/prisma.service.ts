@@ -1,11 +1,13 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    const adapter = new PrismaBetterSqlite3({ url: 'dev.db' });
+    const dbUrl = process.env.DATABASE_URL || 'file:./dev.db';
+    const sqlitePath = dbUrl.replace(/^file:/, '').replace(/^\//, '');
+    const adapter = new PrismaLibSql({ url: `file:${sqlitePath}` });
     super({ adapter });
   }
 

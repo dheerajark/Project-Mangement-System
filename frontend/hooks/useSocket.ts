@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+import { getApiUrl } from '@/services/getApiUrl';
 
 export function useSocket(onNotificationReceived?: (notification: any) => void) {
   const socketRef = useRef<Socket | null>(null);
@@ -22,7 +21,7 @@ export function useSocket(onNotificationReceived?: (notification: any) => void) 
     if (!token) return;
 
     // Initialize socket connection to the '/notifications' namespace
-    const socket = io(`${API_URL}/notifications`, {
+    const socket = io(`${getApiUrl()}/notifications`, {
       auth: {
         token,
       },
