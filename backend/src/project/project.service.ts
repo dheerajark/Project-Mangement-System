@@ -1,11 +1,21 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
+import { UpdateProjectMemberDto } from './dto/update-project-member.dto';
 import { UpdateProjectSettingsDto } from './dto/update-project-settings.dto';
-import { ProjectVisibility, ProjectStatus, ProjectMemberRole, TaskStatus } from '@prisma/client';
+import {
+  ProjectVisibility,
+  ProjectStatus,
+  ProjectMemberRole,
+  TaskStatus,
+} from '@prisma/client';
 
 @Injectable()
 export class ProjectService {
@@ -14,16 +24,20 @@ export class ProjectService {
     private auditService: AuditService,
   ) {}
 
-  async createProject(organizationId: string, userId: string, dto: CreateProjectDto) {
+  async createProject(
+    organizationId: string,
+    userId: string,
+    dto: CreateProjectDto,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       // 1. Generate unique sequential projectCode scoped to organization
       const cleanName = dto.name.replace(/[^a-zA-Z]/g, '').toUpperCase();
       const prefix = cleanName.substring(0, 3).padEnd(3, 'P');
-      
+
       const projectCount = await tx.project.count({
         where: { organizationId },
       });
-      
+
       const sequenceStr = String(projectCount + 1).padStart(3, '0');
       let projectCode = `${prefix}-${sequenceStr}`;
 
@@ -37,7 +51,10 @@ export class ProjectService {
         existing = await tx.project.findUnique({ where: { projectCode } });
       }
 
-      // 2. Create Project
+      // 2. Determine ownerId
+      const targetOwnerId = dto.ownerId || userId;
+
+      // 3. Create Project
       const project = await tx.project.create({
         data: {
           name: dto.name,
@@ -55,13 +72,18 @@ export class ProjectService {
           tags: dto.tags || null,
           isTemplate: dto.isTemplate || false,
           taskLayout: dto.taskLayout || 'STANDARD',
+          groupId: dto.groupId || null,
+          isStrict: dto.isStrict || false,
+          workingDays: dto.workingDays || '1,2,3,4,5',
+          hoursPerDay: dto.hoursPerDay || 8.0,
+          allowClientAccess: dto.allowClientAccess || false,
           status: ProjectStatus.ACTIVE,
           organizationId,
-          ownerId: userId,
+          ownerId: targetOwnerId,
         },
       });
 
-      // 3. Create ProjectSettings
+      // 4. Create ProjectSettings
       const settings = await tx.projectSettings.create({
         data: {
           projectId: project.id,
@@ -71,17 +93,31 @@ export class ProjectService {
         },
       });
 
-      // 4. Add the creator as the OWNER member
-      const member = await tx.projectMember.create({
+      // 5. Add creator and targetOwnerId as ProjectMembers
+      const createdMembers: any[] = [];
+      const primaryOwnerMember = await tx.projectMember.create({
         data: {
           projectId: project.id,
-          userId,
+          userId: targetOwnerId,
           role: ProjectMemberRole.OWNER,
           addedBy: userId,
         },
       });
+      createdMembers.push(primaryOwnerMember);
 
-      // 5. Template Baseline Cloning (If templateProjectId is provided)
+      if (targetOwnerId !== userId) {
+        const creatorMember = await tx.projectMember.create({
+          data: {
+            projectId: project.id,
+            userId,
+            role: ProjectMemberRole.MANAGER,
+            addedBy: userId,
+          },
+        });
+        createdMembers.push(creatorMember);
+      }
+
+      // 6. Template Baseline Cloning with Smart Date Shifting (If templateProjectId is provided)
       if (dto.templateProjectId) {
         const sourceTemplate = await tx.project.findFirst({
           where: { id: dto.templateProjectId, organizationId, deletedAt: null },
@@ -95,17 +131,38 @@ export class ProjectService {
         if (sourceTemplate) {
           const milestoneMap = new Map<string, string>();
 
-          // 5a. Clone Milestones (Default: true if not explicitly false)
+          // Calculate Date Offset Delta if new startDate is specified and source has startDate
+          let dateShiftMs = 0;
+          if (
+            dto.shiftDates !== false &&
+            dto.startDate &&
+            sourceTemplate.startDate
+          ) {
+            dateShiftMs =
+              new Date(dto.startDate).getTime() -
+              new Date(sourceTemplate.startDate).getTime();
+          }
+
+          // 6a. Clone Milestones (Default: true if not explicitly false)
           if (dto.copyMilestones !== false) {
             for (const ms of sourceTemplate.milestones) {
+              const shiftedStart =
+                ms.startDate && dateShiftMs !== 0
+                  ? new Date(new Date(ms.startDate).getTime() + dateShiftMs)
+                  : ms.startDate;
+              const shiftedDue =
+                ms.dueDate && dateShiftMs !== 0
+                  ? new Date(new Date(ms.dueDate).getTime() + dateShiftMs)
+                  : ms.dueDate;
+
               const newMs = await tx.milestone.create({
                 data: {
                   projectId: project.id,
                   organizationId,
                   title: ms.title,
                   description: ms.description,
-                  startDate: ms.startDate,
-                  dueDate: ms.dueDate,
+                  startDate: shiftedStart,
+                  dueDate: shiftedDue,
                   status: 'PLANNED',
                 },
               });
@@ -113,10 +170,15 @@ export class ProjectService {
             }
           }
 
-          // 5b. Clone Tasks (Default: true if not explicitly false)
+          // 6b. Clone Tasks (Default: true if not explicitly false)
           if (dto.copyTasks !== false) {
             let taskCounter = project.nextTaskNumber;
             for (const task of sourceTemplate.tasks) {
+              const shiftedDue =
+                task.dueDate && dateShiftMs !== 0
+                  ? new Date(new Date(task.dueDate).getTime() + dateShiftMs)
+                  : task.dueDate;
+
               await tx.task.create({
                 data: {
                   projectId: project.id,
@@ -127,8 +189,11 @@ export class ProjectService {
                   priority: task.priority,
                   type: task.type,
                   status: TaskStatus.TODO,
+                  dueDate: shiftedDue,
                   estimatedHours: task.estimatedHours,
-                  milestoneId: task.milestoneId ? milestoneMap.get(task.milestoneId) || null : null,
+                  milestoneId: task.milestoneId
+                    ? milestoneMap.get(task.milestoneId) || null
+                    : null,
                   reporterId: userId,
                 },
               });
@@ -139,10 +204,10 @@ export class ProjectService {
             });
           }
 
-          // 5c. Clone Members (Default: false unless explicitly true)
+          // 6c. Clone Members (Default: false unless explicitly true)
           if (dto.copyMembers === true) {
             for (const m of sourceTemplate.members) {
-              if (m.userId !== userId) {
+              if (m.userId !== userId && m.userId !== targetOwnerId) {
                 await tx.projectMember.create({
                   data: {
                     projectId: project.id,
@@ -172,7 +237,7 @@ export class ProjectService {
       return {
         ...project,
         settings,
-        members: [member],
+        members: createdMembers,
       };
     });
   }
@@ -220,6 +285,7 @@ export class ProjectService {
         ],
       },
       include: {
+        group: true,
         owner: {
           select: {
             id: true,
@@ -243,9 +309,13 @@ export class ProjectService {
     return projects.map((p) => {
       const totalTasks = p.tasks.length;
       const completedTasks = p.tasks.filter((t) => t.status === 'DONE').length;
-      const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-      
-      const loggedHours = p.timeEntries.reduce((sum, te) => sum + (te.hours || 0), 0);
+      const progress =
+        totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+      const loggedHours = p.timeEntries.reduce(
+        (sum, te) => sum + (te.hours || 0),
+        0,
+      );
       const spentAmount = p.billingRate ? loggedHours * p.billingRate : 0;
 
       const { tasks, timeEntries, ...projectWithoutTasks } = p;
@@ -258,7 +328,11 @@ export class ProjectService {
     });
   }
 
-  async getProjectById(organizationId: string, userId: string, projectId: string) {
+  async getProjectById(
+    organizationId: string,
+    userId: string,
+    projectId: string,
+  ) {
     const project = await this.prisma.project.findFirst({
       where: {
         id: projectId,
@@ -266,6 +340,7 @@ export class ProjectService {
         deletedAt: null,
       },
       include: {
+        group: true,
         owner: {
           select: {
             id: true,
@@ -306,16 +381,26 @@ export class ProjectService {
     if (project.visibility === ProjectVisibility.PRIVATE) {
       const isMember = project.members.some((m) => m.userId === userId);
       if (!isMember) {
-        throw new ForbiddenException('You do not have access to this private project');
+        throw new ForbiddenException(
+          'You do not have access to this private project',
+        );
       }
     }
 
     const totalTasks = project.tasks.length;
-    const completedTasks = project.tasks.filter((t) => t.status === 'DONE').length;
-    const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const completedTasks = project.tasks.filter(
+      (t) => t.status === 'DONE',
+    ).length;
+    const progress =
+      totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-    const loggedHours = project.timeEntries.reduce((sum, te) => sum + (te.hours || 0), 0);
-    const spentAmount = project.billingRate ? loggedHours * project.billingRate : 0;
+    const loggedHours = project.timeEntries.reduce(
+      (sum, te) => sum + (te.hours || 0),
+      0,
+    );
+    const spentAmount = project.billingRate
+      ? loggedHours * project.billingRate
+      : 0;
 
     const { tasks, timeEntries, ...projectWithoutTasks } = project;
 
@@ -327,9 +412,18 @@ export class ProjectService {
     };
   }
 
-  async updateProject(organizationId: string, userId: string, projectId: string, dto: UpdateProjectDto) {
-    const project = await this.getProjectById(organizationId, userId, projectId);
-    
+  async updateProject(
+    organizationId: string,
+    userId: string,
+    projectId: string,
+    dto: UpdateProjectDto,
+  ) {
+    const project = await this.getProjectById(
+      organizationId,
+      userId,
+      projectId,
+    );
+
     if (project.status === ProjectStatus.ARCHIVED) {
       throw new ForbiddenException('Cannot modify an archived project');
     }
@@ -352,6 +446,24 @@ export class ProjectService {
         tags: dto.tags,
         isTemplate: dto.isTemplate,
         taskLayout: dto.taskLayout,
+        groupId: dto.groupId,
+        ownerId: dto.ownerId,
+        isStrict: dto.isStrict,
+        workingDays: dto.workingDays,
+        hoursPerDay: dto.hoursPerDay,
+        allowClientAccess: dto.allowClientAccess,
+      },
+      include: {
+        group: true,
+        owner: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        settings: true,
       },
     });
 
@@ -368,9 +480,17 @@ export class ProjectService {
     return updatedProject;
   }
 
-  async archiveProject(organizationId: string, userId: string, projectId: string) {
-    const project = await this.getProjectById(organizationId, userId, projectId);
-    
+  async archiveProject(
+    organizationId: string,
+    userId: string,
+    projectId: string,
+  ) {
+    const project = await this.getProjectById(
+      organizationId,
+      userId,
+      projectId,
+    );
+
     if (project.status === ProjectStatus.ARCHIVED) {
       return project;
     }
@@ -393,11 +513,22 @@ export class ProjectService {
     return updatedProject;
   }
 
-  async addProjectMember(organizationId: string, userId: string, projectId: string, dto: AddProjectMemberDto) {
-    const project = await this.getProjectById(organizationId, userId, projectId);
+  async addProjectMember(
+    organizationId: string,
+    userId: string,
+    projectId: string,
+    dto: AddProjectMemberDto,
+  ) {
+    const project = await this.getProjectById(
+      organizationId,
+      userId,
+      projectId,
+    );
 
     if (project.status === ProjectStatus.ARCHIVED) {
-      throw new ForbiddenException('Cannot modify members of an archived project');
+      throw new ForbiddenException(
+        'Cannot modify members of an archived project',
+      );
     }
 
     // Explicit Cross-Tenant Validation
@@ -410,7 +541,9 @@ export class ProjectService {
     }
 
     if (targetUser.organizationId !== organizationId) {
-      throw new ForbiddenException('Cannot add users from other organizations to projects');
+      throw new ForbiddenException(
+        'Cannot add users from other organizations to projects',
+      );
     }
 
     const existingMember = await this.prisma.projectMember.findFirst({
@@ -421,7 +554,15 @@ export class ProjectService {
     if (existingMember) {
       member = await this.prisma.projectMember.update({
         where: { id: existingMember.id },
-        data: { role: dto.role, deletedAt: null, addedBy: userId },
+        data: {
+          role: dto.role,
+          hourlyRate:
+            dto.hourlyRate !== undefined
+              ? dto.hourlyRate
+              : existingMember.hourlyRate,
+          deletedAt: null,
+          addedBy: userId,
+        },
       });
     } else {
       member = await this.prisma.projectMember.create({
@@ -429,6 +570,7 @@ export class ProjectService {
           projectId,
           userId: dto.userId,
           role: dto.role,
+          hourlyRate: dto.hourlyRate !== undefined ? dto.hourlyRate : null,
           addedBy: userId,
         },
       });
@@ -447,11 +589,22 @@ export class ProjectService {
     return member;
   }
 
-  async removeProjectMember(organizationId: string, userId: string, projectId: string, memberUserId: string) {
-    const project = await this.getProjectById(organizationId, userId, projectId);
+  async removeProjectMember(
+    organizationId: string,
+    userId: string,
+    projectId: string,
+    memberUserId: string,
+  ) {
+    const project = await this.getProjectById(
+      organizationId,
+      userId,
+      projectId,
+    );
 
     if (project.status === ProjectStatus.ARCHIVED) {
-      throw new ForbiddenException('Cannot modify members of an archived project');
+      throw new ForbiddenException(
+        'Cannot modify members of an archived project',
+      );
     }
 
     const member = await this.prisma.projectMember.findFirst({
@@ -465,16 +618,84 @@ export class ProjectService {
     // Prevent removing the only OWNER
     if (member.role === ProjectMemberRole.OWNER) {
       const otherOwners = await this.prisma.projectMember.count({
-        where: { projectId, role: ProjectMemberRole.OWNER, userId: { not: memberUserId }, deletedAt: null },
+        where: {
+          projectId,
+          role: ProjectMemberRole.OWNER,
+          userId: { not: memberUserId },
+          deletedAt: null,
+        },
       });
       if (otherOwners === 0) {
-        throw new ForbiddenException('Cannot remove the only owner of the project');
+        throw new ForbiddenException(
+          'Cannot remove the only owner of the project',
+        );
       }
     }
 
-    const updatedMember = await this.prisma.projectMember.update({
-      where: { id: member.id },
-      data: { deletedAt: new Date() },
+    const updatedMember = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.projectMember.update({
+        where: { id: member.id },
+        data: { deletedAt: new Date() },
+      });
+
+      // Find all active tasks in this project assigned to the removed member
+      const assignedTasks = await tx.task.findMany({
+        where: {
+          projectId,
+          assigneeId: memberUserId,
+          deletedAt: null,
+        },
+        include: {
+          assignee: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
+        },
+      });
+
+      if (assignedTasks.length > 0) {
+        await tx.task.updateMany({
+          where: {
+            projectId,
+            assigneeId: memberUserId,
+            deletedAt: null,
+          },
+          data: {
+            assigneeId: null,
+          },
+        });
+
+        for (const t of assignedTasks) {
+          const oldAssigneeName = t.assignee
+            ? `${t.assignee.firstName || ''} ${t.assignee.lastName || ''}`.trim() || t.assignee.email
+            : memberUserId;
+
+          await tx.taskActivity.create({
+            data: {
+              taskId: t.id,
+              userId,
+              action: 'ASSIGNEE_CHANGED',
+              oldValue: oldAssigneeName,
+              newValue: 'Unassigned',
+            },
+          });
+
+          await tx.auditLog.create({
+            data: {
+              organizationId,
+              userId,
+              entityType: 'Task',
+              entityId: t.id,
+              action: 'TASK_UNASSIGNED_MEMBER_REMOVED',
+              projectId,
+              taskId: t.id,
+              oldValue: JSON.stringify({ assigneeId: memberUserId, name: oldAssigneeName }),
+              newValue: JSON.stringify({ assigneeId: null, name: 'Unassigned' }),
+            },
+          });
+        }
+      }
+
+      return updated;
     });
 
     await this.auditService.log(
@@ -490,11 +711,101 @@ export class ProjectService {
     return updatedMember;
   }
 
-  async updateProjectSettings(organizationId: string, userId: string, projectId: string, dto: UpdateProjectSettingsDto) {
-    const project = await this.getProjectById(organizationId, userId, projectId);
+  async updateProjectMember(
+    organizationId: string,
+    userId: string,
+    projectId: string,
+    memberUserId: string,
+    dto: UpdateProjectMemberDto,
+  ) {
+    const project = await this.getProjectById(
+      organizationId,
+      userId,
+      projectId,
+    );
 
     if (project.status === ProjectStatus.ARCHIVED) {
-      throw new ForbiddenException('Cannot modify settings of an archived project');
+      throw new ForbiddenException(
+        'Cannot modify members of an archived project',
+      );
+    }
+
+    const member = await this.prisma.projectMember.findFirst({
+      where: { projectId, userId: memberUserId, deletedAt: null },
+    });
+
+    if (!member) {
+      throw new NotFoundException('Member not found in this project');
+    }
+
+    // Prevent demoting the only OWNER
+    if (
+      member.role === ProjectMemberRole.OWNER &&
+      dto.role &&
+      dto.role !== ProjectMemberRole.OWNER
+    ) {
+      const otherOwners = await this.prisma.projectMember.count({
+        where: {
+          projectId,
+          role: ProjectMemberRole.OWNER,
+          userId: { not: memberUserId },
+          deletedAt: null,
+        },
+      });
+      if (otherOwners === 0) {
+        throw new ForbiddenException(
+          'Cannot demote the only owner of the project',
+        );
+      }
+    }
+
+    const updatedMember = await this.prisma.projectMember.update({
+      where: { id: member.id },
+      data: {
+        ...(dto.role !== undefined && { role: dto.role }),
+        ...(dto.hourlyRate !== undefined && { hourlyRate: dto.hourlyRate }),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    await this.auditService.log(
+      organizationId,
+      userId,
+      'ProjectMember',
+      member.id,
+      'PROJECT_MEMBER_UPDATED',
+      member,
+      updatedMember,
+    );
+
+    return updatedMember;
+  }
+
+  async updateProjectSettings(
+    organizationId: string,
+    userId: string,
+    projectId: string,
+    dto: UpdateProjectSettingsDto,
+  ) {
+    const project = await this.getProjectById(
+      organizationId,
+      userId,
+      projectId,
+    );
+
+    if (project.status === ProjectStatus.ARCHIVED) {
+      throw new ForbiddenException(
+        'Cannot modify settings of an archived project',
+      );
     }
 
     const oldSettings = project.settings;

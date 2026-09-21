@@ -1,10 +1,10 @@
+import { IsString, IsOptional, IsEnum, MaxLength } from 'class-validator';
 import {
-  IsString,
-  IsOptional,
-  IsEnum,
-  MaxLength,
-} from 'class-validator';
-import { IssueType, IssuePriority, IssueSeverity, IssueStatus } from '@prisma/client';
+  IssueType,
+  IssuePriority,
+  IssueSeverity,
+  IssueStatus,
+} from '@prisma/client';
 
 export class UpdateIssueDto {
   @IsString()

@@ -1,9 +1,15 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 import { NotificationType, MilestoneStatus } from '@prisma/client';
 import { NotificationService } from '../notification/notification.service';
+import { isClientUser } from '../common/utils/client-detection.util';
 
 @Injectable()
 export class MilestoneService {
@@ -51,11 +57,19 @@ export class MilestoneService {
       whereClause.title = { contains: filters.search };
     }
 
+    const isClient = await isClientUser(this.prisma, userId, filters.projectId);
+    if (isClient) {
+      whereClause.flag = 'EXTERNAL';
+    }
+
     const milestones = await this.prisma.milestone.findMany({
       where: whereClause,
       include: {
         project: {
           select: { id: true, name: true, projectCode: true },
+        },
+        owner: {
+          select: { id: true, email: true, firstName: true, lastName: true },
         },
         tasks: {
           where: { deletedAt: null },
@@ -67,7 +81,8 @@ export class MilestoneService {
     return milestones.map((m) => {
       const totalTasks = m.tasks.length;
       const completedTasks = m.tasks.filter((t) => t.status === 'DONE').length;
-      const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+      const progress =
+        totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
       const { tasks, ...milestoneWithoutTasks } = m;
       return {
         ...milestoneWithoutTasks,
@@ -78,14 +93,18 @@ export class MilestoneService {
     });
   }
 
-  async verifyProjectAccess(projectId: string, organizationId: string, userId: string) {
+  async verifyProjectAccess(
+    projectId: string,
+    organizationId: string,
+    userId: string,
+  ) {
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, organizationId, deletedAt: null },
       include: {
         members: {
-          where: { userId, deletedAt: null }
-        }
-      }
+          where: { userId, deletedAt: null },
+        },
+      },
     });
 
     if (!project) {
@@ -95,14 +114,21 @@ export class MilestoneService {
     if (project.visibility === 'PRIVATE') {
       const isMember = project.members.length > 0;
       if (!isMember) {
-        throw new ForbiddenException('You do not have access to this private project');
+        throw new ForbiddenException(
+          'You do not have access to this private project',
+        );
       }
     }
 
     return project;
   }
 
-  async createMilestone(organizationId: string, userId: string, projectId: string, dto: CreateMilestoneDto) {
+  async createMilestone(
+    organizationId: string,
+    userId: string,
+    projectId: string,
+    dto: CreateMilestoneDto,
+  ) {
     await this.verifyProjectAccess(projectId, organizationId, userId);
 
     // Unique title validation scoped to project (excluding archived ones)
@@ -110,12 +136,19 @@ export class MilestoneService {
       where: {
         projectId,
         title: dto.title,
-        deletedAt: null
-      }
+        deletedAt: null,
+      },
     });
 
     if (duplicate) {
-      throw new BadRequestException('A milestone with this title already exists in this project.');
+      throw new BadRequestException(
+        'A milestone with this title already exists in this project.',
+      );
+    }
+
+    const isClient = await isClientUser(this.prisma, userId, projectId);
+    if (isClient) {
+      throw new ForbiddenException('Client users cannot create milestones');
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -126,10 +159,12 @@ export class MilestoneService {
           startDate: dto.startDate ? new Date(dto.startDate) : null,
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
           status: dto.status || 'PLANNED',
+          flag: dto.flag || 'INTERNAL',
+          ownerId: dto.ownerId || null,
           position: dto.position || 0,
           projectId,
-          organizationId
-        }
+          organizationId,
+        },
       });
 
       // Write ProjectActivity log
@@ -140,8 +175,8 @@ export class MilestoneService {
           organizationId,
           milestoneId: milestone.id,
           action: 'MILESTONE_CREATED',
-          newValue: JSON.stringify(milestone)
-        }
+          newValue: JSON.stringify(milestone),
+        },
       });
 
       // Write general AuditLog
@@ -152,50 +187,93 @@ export class MilestoneService {
           entityType: 'Milestone',
           entityId: milestone.id,
           action: 'MILESTONE_CREATED',
-          newValue: JSON.stringify(milestone)
-        }
+          newValue: JSON.stringify(milestone),
+        },
       });
 
       return milestone;
     });
   }
 
-  async getProjectMilestones(organizationId: string, userId: string, projectId: string) {
+  async getProjectMilestones(
+    organizationId: string,
+    userId: string,
+    projectId: string,
+  ) {
     await this.verifyProjectAccess(projectId, organizationId, userId);
 
+    const isClient = await isClientUser(this.prisma, userId, projectId);
+
+    const whereClause: any = { projectId, deletedAt: null };
+    if (isClient) {
+      whereClause.flag = 'EXTERNAL';
+    }
+
     const milestones = await this.prisma.milestone.findMany({
-      where: { projectId, deletedAt: null },
+      where: whereClause,
       include: {
+        owner: {
+          select: { id: true, email: true, firstName: true, lastName: true },
+        },
+        taskLists: {
+          where: isClient
+            ? { deletedAt: null, flag: 'EXTERNAL' }
+            : { deletedAt: null },
+          select: { id: true, name: true, flag: true, status: true },
+        },
         tasks: {
-          where: { deletedAt: null }
-        }
+          where: isClient
+            ? {
+                deletedAt: null,
+                OR: [
+                  { taskList: { flag: 'EXTERNAL' } },
+                  { taskListId: null, milestone: { flag: 'EXTERNAL' } },
+                ],
+              }
+            : { deletedAt: null },
+        },
       },
-      orderBy: { position: 'asc' }
+      orderBy: { position: 'asc' },
     });
 
-    return milestones.map(m => {
+    return milestones.map((m) => {
       const totalTasks = m.tasks.length;
-      const completedTasks = m.tasks.filter(t => t.status === 'DONE').length;
-      const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-      
+      const completedTasks = m.tasks.filter((t) => t.status === 'DONE').length;
+      const progress =
+        totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
       const { tasks, ...milestoneWithoutTasks } = m;
       return {
         ...milestoneWithoutTasks,
         totalTasks,
         completedTasks,
-        progress
+        progress,
       };
     });
   }
 
-  async getMilestoneById(organizationId: string, userId: string, milestoneId: string) {
+  async getMilestoneById(
+    organizationId: string,
+    userId: string,
+    milestoneId: string,
+  ) {
     const milestone = await this.prisma.milestone.findFirst({
       where: { id: milestoneId, organizationId, deletedAt: null },
       include: {
+        owner: {
+          select: { id: true, email: true, firstName: true, lastName: true },
+        },
+        taskLists: {
+          where: { deletedAt: null },
+          include: {
+            tasks: { where: { deletedAt: null } },
+          },
+          orderBy: { position: 'asc' },
+        },
         tasks: {
-          where: { deletedAt: null }
-        }
-      }
+          where: { deletedAt: null },
+        },
+      },
     });
 
     if (!milestone) {
@@ -204,28 +282,76 @@ export class MilestoneService {
 
     await this.verifyProjectAccess(milestone.projectId, organizationId, userId);
 
+    const isClient = await isClientUser(
+      this.prisma,
+      userId,
+      milestone.projectId,
+    );
+    if (isClient && milestone.flag === 'INTERNAL') {
+      throw new ForbiddenException('Access denied: Internal milestone');
+    }
+
+    const filteredTaskLists = isClient
+      ? (milestone.taskLists || []).filter((tl) => tl.flag === 'EXTERNAL')
+      : milestone.taskLists || [];
+
     const totalTasks = milestone.tasks.length;
-    const completedTasks = milestone.tasks.filter(t => t.status === 'DONE').length;
-    const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const completedTasks = milestone.tasks.filter(
+      (t) => t.status === 'DONE',
+    ).length;
+    const progress =
+      totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    const taskListsWithStats = filteredTaskLists.map((tl) => {
+      const tlTotal = tl.tasks.length;
+      const tlCompleted = tl.tasks.filter((t) => t.status === 'DONE').length;
+      const tlProgress =
+        tlTotal > 0 ? Math.round((tlCompleted / tlTotal) * 100) : 0;
+      return {
+        ...tl,
+        totalTasks: tlTotal,
+        completedTasks: tlCompleted,
+        progress: tlProgress,
+      };
+    });
 
     return {
       ...milestone,
+      taskLists: taskListsWithStats,
       totalTasks,
       completedTasks,
-      progress
+      progress,
     };
   }
 
-  async updateMilestone(organizationId: string, userId: string, milestoneId: string, dto: UpdateMilestoneDto) {
+  async updateMilestone(
+    organizationId: string,
+    userId: string,
+    milestoneId: string,
+    dto: UpdateMilestoneDto,
+  ) {
     const oldMilestone = await this.prisma.milestone.findFirst({
-      where: { id: milestoneId, organizationId, deletedAt: null }
+      where: { id: milestoneId, organizationId, deletedAt: null },
     });
 
     if (!oldMilestone) {
       throw new NotFoundException('Milestone not found');
     }
 
-    await this.verifyProjectAccess(oldMilestone.projectId, organizationId, userId);
+    await this.verifyProjectAccess(
+      oldMilestone.projectId,
+      organizationId,
+      userId,
+    );
+
+    const isClient = await isClientUser(
+      this.prisma,
+      userId,
+      oldMilestone.projectId,
+    );
+    if (isClient) {
+      throw new ForbiddenException('Client users cannot modify milestones');
+    }
 
     if (dto.title) {
       const duplicate = await this.prisma.milestone.findFirst({
@@ -233,12 +359,14 @@ export class MilestoneService {
           projectId: oldMilestone.projectId,
           title: dto.title,
           deletedAt: null,
-          id: { not: milestoneId }
-        }
+          id: { not: milestoneId },
+        },
       });
 
       if (duplicate) {
-        throw new BadRequestException('A milestone with this title already exists in this project.');
+        throw new BadRequestException(
+          'A milestone with this title already exists in this project.',
+        );
       }
     }
 
@@ -248,24 +376,44 @@ export class MilestoneService {
         data: {
           title: dto.title,
           description: dto.description,
-          startDate: dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
-          dueDate: dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
+          startDate:
+            dto.startDate !== undefined
+              ? dto.startDate
+                ? new Date(dto.startDate)
+                : null
+              : undefined,
+          dueDate:
+            dto.dueDate !== undefined
+              ? dto.dueDate
+                ? new Date(dto.dueDate)
+                : null
+              : undefined,
           status: dto.status,
-          position: dto.position
-        }
+          flag: dto.flag,
+          ownerId: dto.ownerId !== undefined ? dto.ownerId || null : undefined,
+          position: dto.position,
+        },
       });
+
+      // If milestone flag was updated, cascade to all active member task lists (Zoho Projects architecture)
+      if (dto.flag !== undefined && dto.flag !== oldMilestone.flag) {
+        await tx.taskList.updateMany({
+          where: { milestoneId, deletedAt: null },
+          data: { flag: dto.flag === 'EXTERNAL' ? 'EXTERNAL' : 'INTERNAL' },
+        });
+      }
 
       // Write ProjectActivity log
       await tx.projectActivity.create({
         data: {
-          projectId: oldMilestone!.projectId,
+          projectId: oldMilestone.projectId,
           userId,
           organizationId,
           milestoneId,
           action: 'MILESTONE_UPDATED',
           oldValue: JSON.stringify(oldMilestone),
-          newValue: JSON.stringify(updated)
-        }
+          newValue: JSON.stringify(updated),
+        },
       });
 
       // Write general AuditLog
@@ -277,16 +425,20 @@ export class MilestoneService {
           entityId: milestoneId,
           action: 'MILESTONE_UPDATED',
           oldValue: JSON.stringify(oldMilestone),
-          newValue: JSON.stringify(updated)
-        }
+          newValue: JSON.stringify(updated),
+        },
       });
 
       return updated;
     });
 
-    if (dto.status && dto.status !== oldMilestone!.status && (dto.status === 'ACHIEVED' || dto.status === 'MISSED')) {
+    if (
+      dto.status &&
+      dto.status !== oldMilestone.status &&
+      (dto.status === 'ACHIEVED' || dto.status === 'MISSED')
+    ) {
       const projectWithManagers = await this.prisma.project.findUnique({
-        where: { id: oldMilestone!.projectId },
+        where: { id: oldMilestone.projectId },
         include: {
           members: {
             where: {
@@ -311,9 +463,9 @@ export class MilestoneService {
           title: 'Milestone Status Updated',
           message: `Milestone [${updatedMilestone.title}] in project [${projectWithManagers?.projectCode || 'PROJ'}] was marked as ${updatedMilestone.status.toLowerCase()}`,
           userId: recipientId,
-          actionUrl: `/projects/${oldMilestone!.projectId}/milestones/${updatedMilestone.id}`,
+          actionUrl: `/projects/${oldMilestone.projectId}/milestones/${updatedMilestone.id}`,
           triggeredById: userId,
-          projectId: oldMilestone!.projectId,
+          projectId: oldMilestone.projectId,
           organizationId,
           metadata: {
             projectCode: projectWithManagers?.projectCode,
@@ -328,14 +480,18 @@ export class MilestoneService {
     return updatedMilestone;
   }
 
-  async archiveMilestone(organizationId: string, userId: string, milestoneId: string) {
+  async archiveMilestone(
+    organizationId: string,
+    userId: string,
+    milestoneId: string,
+  ) {
     const milestone = await this.prisma.milestone.findFirst({
       where: { id: milestoneId, organizationId, deletedAt: null },
       include: {
         tasks: {
-          where: { deletedAt: null }
-        }
-      }
+          where: { deletedAt: null },
+        },
+      },
     });
 
     if (!milestone) {
@@ -344,6 +500,15 @@ export class MilestoneService {
 
     await this.verifyProjectAccess(milestone.projectId, organizationId, userId);
 
+    const isClient = await isClientUser(
+      this.prisma,
+      userId,
+      milestone.projectId,
+    );
+    if (isClient) {
+      throw new ForbiddenException('Client users cannot archive milestones');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       // Soft-delete the milestone and rename the title to free it up for future milestones
       const archivedTitle = `${milestone.title} (Archived-${milestone.id.substring(0, 8)})`;
@@ -351,15 +516,15 @@ export class MilestoneService {
         where: { id: milestoneId },
         data: {
           deletedAt: new Date(),
-          title: archivedTitle
-        }
+          title: archivedTitle,
+        },
       });
 
       // Unlink all associated tasks
       if (milestone.tasks.length > 0) {
         await tx.task.updateMany({
           where: { milestoneId },
-          data: { milestoneId: null }
+          data: { milestoneId: null },
         });
 
         // Write TaskActivity for each unlinked task
@@ -370,8 +535,8 @@ export class MilestoneService {
               userId,
               action: 'TASK_UNLINKED_FROM_MILESTONE',
               oldValue: JSON.stringify({ milestoneId, title: milestone.title }),
-              newValue: null
-            }
+              newValue: null,
+            },
           });
         }
       }
@@ -385,8 +550,8 @@ export class MilestoneService {
           milestoneId,
           action: 'MILESTONE_ARCHIVED',
           oldValue: JSON.stringify(milestone),
-          newValue: JSON.stringify(updatedMilestone)
-        }
+          newValue: JSON.stringify(updatedMilestone),
+        },
       });
 
       // Write general AuditLog
@@ -398,8 +563,8 @@ export class MilestoneService {
           entityId: milestoneId,
           action: 'MILESTONE_ARCHIVED',
           oldValue: JSON.stringify(milestone),
-          newValue: JSON.stringify(updatedMilestone)
-        }
+          newValue: JSON.stringify(updatedMilestone),
+        },
       });
 
       return updatedMilestone;

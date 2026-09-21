@@ -22,7 +22,10 @@ async function bootstrap() {
   // Retrieve ConfigService to fetch dynamic configurations
   const configService = app.get(ConfigService);
   const allowedOriginsEnv = configService.get<string>('ALLOWED_ORIGINS') || '';
-  const allowedOrigins = allowedOriginsEnv.split(',').map(origin => origin.trim()).filter(Boolean);
+  const allowedOrigins = allowedOriginsEnv
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
   // Enable CORS with strict dynamic origin matching
   app.enableCors({
@@ -41,7 +44,9 @@ async function bootstrap() {
   // Setup Swagger Documentation
   const config = new DocumentBuilder()
     .setTitle('Enterprise Project Management System API')
-    .setDescription('The API documentation for EPMS (inspired by Zoho/OpenProject)')
+    .setDescription(
+      'The API documentation for EPMS (inspired by Zoho/OpenProject)',
+    )
     .setVersion('1.0')
     .addBearerAuth()
     .build();
@@ -51,6 +56,8 @@ async function bootstrap() {
   const port = configService.get<number>('PORT') || 3000;
   await app.listen(port);
   logger.log(`Application is running on: http://localhost:${port}`);
-  logger.log(`Swagger documentation available at: http://localhost:${port}/api/docs`);
+  logger.log(
+    `Swagger documentation available at: http://localhost:${port}/api/docs`,
+  );
 }
 bootstrap();

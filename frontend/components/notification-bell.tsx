@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSocket } from '@/hooks/useSocket';
 import { api } from '@/services/api';
 import { useRouter } from 'next/navigation';
@@ -15,7 +15,15 @@ import {
   Clock, 
   AlertCircle, 
   X,
-  FileCheck
+  FileCheck,
+  AtSign,
+  Paperclip,
+  CheckCircle2,
+  RefreshCw,
+  UserMinus,
+  Repeat,
+  ArrowUp,
+  Tag,
 } from 'lucide-react';
 import { useFormatDate } from '@/hooks/useFormatDate';
 
@@ -44,11 +52,29 @@ export default function NotificationBell() {
   const formatDate = useFormatDate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [filterTab, setFilterTab] = useState<'ALL' | 'UNREAD' | 'REMINDERS' | 'MENTIONS'>('ALL');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  // Filter notifications based on active filter tab
+  const filteredNotifications = useMemo(() => {
+    switch (filterTab) {
+      case 'UNREAD':
+        return notifications.filter((n) => !n.isRead);
+      case 'REMINDERS':
+        return notifications.filter(
+          (n) => n.type === 'TASK_REMINDER_DUE' || n.type === 'TASK_REMINDER_OVERDUE',
+        );
+      case 'MENTIONS':
+        return notifications.filter((n) => n.type === 'TASK_MENTION');
+      case 'ALL':
+      default:
+        return notifications;
+    }
+  }, [notifications, filterTab]);
 
   // 1. Fetch user notifications
   const fetchNotifications = async () => {
@@ -144,10 +170,31 @@ export default function NotificationBell() {
   // Icon selector based on category type
   const getNotificationIcon = (type: string) => {
     switch (type) {
+      case 'TASK_REMINDER_DUE':
+        return <Clock className="w-4 h-4 text-amber-400" />;
+      case 'TASK_REMINDER_OVERDUE':
+        return <AlertCircle className="w-4 h-4 text-rose-400 animate-pulse" />;
+      case 'TASK_MENTION':
+        return <AtSign className="w-4 h-4 text-purple-400" />;
       case 'TASK_ASSIGNMENT':
         return <ListTodo className="w-4 h-4 text-blue-400" />;
+      case 'TASK_UNASSIGNED':
+        return <UserMinus className="w-4 h-4 text-slate-400" />;
+      case 'TASK_STATUS_CHANGED':
+        return <RefreshCw className="w-4 h-4 text-indigo-400" />;
+      case 'TASK_COMPLETED':
+        return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
+      case 'TASK_REOPENED':
+        return <RefreshCw className="w-4 h-4 text-amber-400" />;
+      case 'TASK_PRIORITY_CHANGED':
+        return <ArrowUp className="w-4 h-4 text-orange-400" />;
+      case 'TASK_DUE_DATE_CHANGED':
+        return <Calendar className="w-4 h-4 text-sky-400" />;
+      case 'TASK_ATTACHMENT':
+        return <Paperclip className="w-4 h-4 text-teal-400" />;
       case 'TASK_COMMENT':
       case 'ISSUE_COMMENT':
+      case 'TASK_LIST_COMMENT':
         return <MessageSquare className="w-4 h-4 text-purple-400" />;
       case 'ISSUE_ASSIGNMENT':
         return <Bug className="w-4 h-4 text-orange-400" />;
@@ -161,6 +208,8 @@ export default function NotificationBell() {
         return <FileCheck className="w-4 h-4 text-emerald-400" />;
       case 'TIMESHEET_REJECTED':
         return <AlertCircle className="w-4 h-4 text-rose-400" />;
+      case 'RECURRING_TASK_GENERATED':
+        return <Repeat className="w-4 h-4 text-cyan-400" />;
       default:
         return <Bell className="w-4 h-4 text-slate-400" />;
     }
@@ -186,7 +235,7 @@ export default function NotificationBell() {
       {/* Trigger Bell Icon */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all duration-150 flex items-center justify-center"
+        className="relative p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all duration-150 flex items-center justify-center cursor-pointer"
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
@@ -198,9 +247,16 @@ export default function NotificationBell() {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 mt-2.5 w-96 rounded-xl bg-slate-900 border border-slate-800 shadow-2xl z-[999] overflow-hidden backdrop-blur-xl">
-          <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
-            <h3 className="font-semibold text-sm text-slate-200">Notifications</h3>
+        <div className="absolute right-0 mt-2.5 w-96 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl z-[999] overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+          <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-sm text-slate-200">Notifications</h3>
+              {unreadCount > 0 && (
+                <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded-full text-[10px] font-semibold">
+                  {unreadCount} new
+                </span>
+              )}
+            </div>
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllAsRead}
@@ -211,19 +267,63 @@ export default function NotificationBell() {
             )}
           </div>
 
+          {/* Filter Sub-nav */}
+          <div className="flex items-center gap-1 px-3 py-1.5 bg-slate-950/60 border-b border-slate-800 text-[11px] overflow-x-auto">
+            <button
+              onClick={() => setFilterTab('ALL')}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                filterTab === 'ALL'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilterTab('UNREAD')}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                filterTab === 'UNREAD'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              Unread {unreadCount > 0 ? `(${unreadCount})` : ''}
+            </button>
+            <button
+              onClick={() => setFilterTab('REMINDERS')}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                filterTab === 'REMINDERS'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              Reminders
+            </button>
+            <button
+              onClick={() => setFilterTab('MENTIONS')}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer ${
+                filterTab === 'MENTIONS'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              @Mentions
+            </button>
+          </div>
+
           <div className="max-h-[360px] overflow-y-auto divide-y divide-slate-800/60 custom-scrollbar">
-            {notifications.length === 0 ? (
-              <div className="py-10 px-4 text-center">
-                <Bell className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                <p className="text-xs text-slate-400">All caught up! No notifications.</p>
+            {filteredNotifications.length === 0 ? (
+              <div className="py-12 px-4 text-center">
+                <Bell className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-50" />
+                <p className="text-xs text-slate-400">No notifications in this view.</p>
               </div>
             ) : (
-              notifications.map((notif) => (
+              filteredNotifications.map((notif) => (
                 <div
                   key={notif.id}
                   onClick={() => handleNotificationClick(notif)}
                   className={`p-3.5 flex items-start gap-3 hover:bg-slate-800/40 cursor-pointer transition-colors duration-150 group relative ${
-                    !notif.isRead ? 'bg-slate-900/80 border-l-2 border-indigo-500' : ''
+                    !notif.isRead ? 'bg-slate-900/90 border-l-2 border-indigo-500' : ''
                   }`}
                 >
                   <div className="mt-0.5 p-1.5 bg-slate-950/80 border border-slate-800 rounded-lg shrink-0">
@@ -231,7 +331,7 @@ export default function NotificationBell() {
                   </div>
                   <div className="flex-1 min-w-0 pr-6">
                     <p className="text-xs font-semibold text-slate-200 truncate">{notif.title}</p>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">{notif.message}</p>
+                    <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{notif.message}</p>
                     <span className="text-[10px] text-slate-500 font-medium mt-1.5 block">
                       {formatRelativeTime(notif.createdAt)}
                     </span>
@@ -242,7 +342,7 @@ export default function NotificationBell() {
                     {!notif.isRead && (
                       <button
                         onClick={(e) => handleMarkAsRead(notif.id, e)}
-                        className="p-1 hover:text-emerald-400 hover:bg-slate-950 rounded transition-colors text-slate-500"
+                        className="p-1 hover:text-emerald-400 hover:bg-slate-950 rounded transition-colors text-slate-500 cursor-pointer"
                         title="Mark as read"
                       >
                         <Check className="w-3.5 h-3.5" />
@@ -250,7 +350,7 @@ export default function NotificationBell() {
                     )}
                     <button
                       onClick={(e) => handleArchive(notif.id, e)}
-                      className="p-1 hover:text-rose-400 hover:bg-slate-950 rounded transition-colors text-slate-500"
+                      className="p-1 hover:text-rose-400 hover:bg-slate-950 rounded transition-colors text-slate-500 cursor-pointer"
                       title="Archive"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

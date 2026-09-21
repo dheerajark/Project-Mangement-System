@@ -18,13 +18,17 @@ import { EventEmitter } from 'events';
 })
 @Injectable()
 export class NotificationGateway
-  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit, OnModuleInit
+  implements
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnGatewayInit,
+    OnModuleInit
 {
   @WebSocketServer()
   server: Server;
 
   private readonly logger = new Logger(NotificationGateway.name);
-  
+
   // Track active connection counts
   private activeUserSockets = new Map<string, Set<string>>();
 
@@ -42,7 +46,9 @@ export class NotificationGateway
         if (authHeader && authHeader.startsWith('Bearer ')) {
           token = authHeader.split(' ')[1];
         } else {
-          token = (socket.handshake.query.token as string) || (socket.handshake.auth?.token as string);
+          token =
+            (socket.handshake.query.token as string) ||
+            (socket.handshake.auth?.token as string);
         }
 
         if (!token) {
@@ -50,7 +56,9 @@ export class NotificationGateway
         }
 
         const payload = await this.jwtService.verifyAsync(token, {
-          secret: process.env.JWT_ACCESS_SECRET || 'super-secret-jwt-access-key-12345',
+          secret:
+            process.env.JWT_ACCESS_SECRET ||
+            'super-secret-jwt-access-key-12345',
         });
 
         socket.data.userId = payload.sub;
@@ -60,13 +68,19 @@ export class NotificationGateway
         next(new Error(`Authentication error: ${err.message}`));
       }
     });
-    this.logger.log('Notification Socket.IO Gateway initialized with auth middleware.');
+    this.logger.log(
+      'Notification Socket.IO Gateway initialized with auth middleware.',
+    );
   }
 
   onModuleInit() {
     // Listen to decoupled internal events and push to client real-time
     this.eventEmitter.on('notification.created', (notification: any) => {
-      this.sendNotificationToUser(notification.userId, 'notification_received', notification);
+      this.sendNotificationToUser(
+        notification.userId,
+        'notification_received',
+        notification,
+      );
     });
   }
 

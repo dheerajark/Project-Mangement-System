@@ -398,10 +398,10 @@ export default function IssuesTab({ projectId, projectMembers = [], projectTasks
 
       {/* Create Issue Modal */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex justify-end overflow-hidden animate-in fade-in duration-200">
+          <div className="w-full max-w-xl bg-slate-900 border-l border-slate-800 shadow-2xl overflow-hidden flex flex-col h-full animate-in slide-in-from-right duration-300">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
                   <Bug className="w-4 h-4 text-rose-400" />
@@ -416,147 +416,151 @@ export default function IssuesTab({ projectId, projectMembers = [], projectTasks
               </button>
             </div>
 
-            <form onSubmit={handleCreateIssue} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-              {createError && (
-                <div className="bg-rose-950/50 border border-rose-800 text-rose-200 text-xs p-3 rounded-xl flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                  {createError}
-                </div>
-              )}
+            <form onSubmit={handleCreateIssue} className="flex flex-col flex-1 overflow-hidden">
+              {/* Scrollable Form Body */}
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                {createError && (
+                  <div className="bg-rose-950/50 border border-rose-800 text-rose-200 text-xs p-3 rounded-xl flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                    {createError}
+                  </div>
+                )}
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Title *</label>
-                <input
-                  type="text"
-                  value={createTitle}
-                  onChange={(e) => setCreateTitle(e.target.value)}
-                  placeholder="Describe the issue briefly..."
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</label>
-                <textarea
-                  value={createDescription}
-                  onChange={(e) => setCreateDescription(e.target.value)}
-                  placeholder="Detailed description of the issue..."
-                  rows={3}
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Type</label>
-                  <select
-                    value={createType}
-                    onChange={(e) => setCreateType(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
-                  >
-                    {TYPE_OPTIONS.map((t) => (
-                      <option key={t} value={t}>{TYPE_LABELS[t]?.label}</option>
-                    ))}
-                  </select>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Title *</label>
+                  <input
+                    type="text"
+                    value={createTitle}
+                    onChange={(e) => setCreateTitle(e.target.value)}
+                    placeholder="Describe the issue briefly..."
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                  />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Priority</label>
-                  <select
-                    value={createPriority}
-                    onChange={(e) => setCreatePriority(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
-                  >
-                    {PRIORITY_OPTIONS.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</label>
+                  <textarea
+                    value={createDescription}
+                    onChange={(e) => setCreateDescription(e.target.value)}
+                    placeholder="Detailed description of the issue..."
+                    rows={3}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Type</label>
+                    <select
+                      value={createType}
+                      onChange={(e) => setCreateType(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                    >
+                      {TYPE_OPTIONS.map((t) => (
+                        <option key={t} value={t}>{TYPE_LABELS[t]?.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Priority</label>
+                    <select
+                      value={createPriority}
+                      onChange={(e) => setCreatePriority(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                    >
+                      {PRIORITY_OPTIONS.map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Severity</label>
+                    <select
+                      value={createSeverity}
+                      onChange={(e) => setCreateSeverity(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                    >
+                      {SEVERITY_OPTIONS.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assignee</label>
+                    <select
+                      value={createAssigneeId}
+                      onChange={(e) => setCreateAssigneeId(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="">Unassigned</option>
+                      {projectMembers.map((m: any) => (
+                        <option key={m.userId} value={m.userId}>
+                          {m.user?.firstName
+                            ? `${m.user.firstName} ${m.user.lastName || ''}`.trim()
+                            : m.user?.email}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Severity</label>
-                  <select
-                    value={createSeverity}
-                    onChange={(e) => setCreateSeverity(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
-                  >
-                    {SEVERITY_OPTIONS.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Environment</label>
+                  <input
+                    type="text"
+                    value={createEnvironment}
+                    onChange={(e) => setCreateEnvironment(e.target.value)}
+                    placeholder="e.g., Production, Staging, macOS 14..."
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                  />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assignee</label>
-                  <select
-                    value={createAssigneeId}
-                    onChange={(e) => setCreateAssigneeId(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value="">Unassigned</option>
-                    {projectMembers.map((m: any) => (
-                      <option key={m.userId} value={m.userId}>
-                        {m.user?.firstName
-                          ? `${m.user.firstName} ${m.user.lastName || ''}`.trim()
-                          : m.user?.email}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Steps to Reproduce</label>
+                  <textarea
+                    value={createReproductionSteps}
+                    onChange={(e) => setCreateReproductionSteps(e.target.value)}
+                    placeholder="1. Go to...\n2. Click on...\n3. See error..."
+                    rows={3}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none"
+                  />
                 </div>
+
+                {projectTasks.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Linked Task</label>
+                    <select
+                      value={createTaskId}
+                      onChange={(e) => setCreateTaskId(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="">No linked task</option>
+                      {projectTasks.map((t: any) => (
+                        <option key={t.id} value={t.id}>
+                          #{t.taskNumber} — {t.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Environment</label>
-                <input
-                  type="text"
-                  value={createEnvironment}
-                  onChange={(e) => setCreateEnvironment(e.target.value)}
-                  placeholder="e.g., Production, Staging, macOS 14..."
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Steps to Reproduce</label>
-                <textarea
-                  value={createReproductionSteps}
-                  onChange={(e) => setCreateReproductionSteps(e.target.value)}
-                  placeholder="1. Go to...\n2. Click on...\n3. See error..."
-                  rows={3}
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none"
-                />
-              </div>
-
-              {projectTasks.length > 0 && (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Linked Task</label>
-                  <select
-                    value={createTaskId}
-                    onChange={(e) => setCreateTaskId(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
-                  >
-                    <option value="">No linked task</option>
-                    {projectTasks.map((t: any) => (
-                      <option key={t.id} value={t.id}>
-                        #{t.taskNumber} — {t.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800">
+              {/* Fixed Footer at bottom */}
+              <div className="flex justify-end gap-3 p-6 pt-4 border-t border-slate-800 bg-slate-950/60 shrink-0">
                 <button
                   type="button"
                   onClick={resetCreateForm}
-                  className="px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-all"
+                  className="px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={createIssueMutation.isPending}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-lg shadow-rose-500/20 active:scale-95 cursor-pointer"
                 >
                   {createIssueMutation.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
                   Create Issue

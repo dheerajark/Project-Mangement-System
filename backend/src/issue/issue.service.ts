@@ -7,7 +7,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { CreateIssueCommentDto } from './dto/create-issue-comment.dto';
-import { IssueStatus, NotificationType, IssuePriority, IssueSeverity, IssueType } from '@prisma/client';
+import {
+  IssueStatus,
+  NotificationType,
+  IssuePriority,
+  IssueSeverity,
+  IssueType,
+} from '@prisma/client';
 import { NotificationService } from '../notification/notification.service';
 
 const ISSUE_INCLUDE = {
@@ -87,10 +93,7 @@ export class IssueService {
     const conditions: any[] = [];
     if (!canViewAll) {
       conditions.push({
-        OR: [
-          { assigneeId: userId },
-          { reporterId: userId },
-        ],
+        OR: [{ assigneeId: userId }, { reporterId: userId }],
       });
     }
 
@@ -322,7 +325,10 @@ export class IssueService {
       }
 
       // Track assignee change
-      if (dto.assigneeId !== undefined && dto.assigneeId !== existing.assigneeId) {
+      if (
+        dto.assigneeId !== undefined &&
+        dto.assigneeId !== existing.assigneeId
+      ) {
         activities.push({
           issueId,
           userId,
@@ -345,10 +351,7 @@ export class IssueService {
 
       // Determine resolvedAt timestamp
       let resolvedAt = existing.resolvedAt;
-      if (
-        dto.status === 'RESOLVED' ||
-        dto.status === 'CLOSED'
-      ) {
+      if (dto.status === 'RESOLVED' || dto.status === 'CLOSED') {
         resolvedAt = resolvedAt ?? new Date();
       } else if (dto.status === 'REOPENED') {
         resolvedAt = null;
@@ -358,14 +361,18 @@ export class IssueService {
         where: { id: issueId },
         data: {
           ...(dto.title && { title: dto.title }),
-          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.description !== undefined && {
+            description: dto.description,
+          }),
           ...(dto.type && { type: dto.type }),
           ...(dto.status && { status: dto.status }),
           ...(dto.priority && { priority: dto.priority }),
           ...(dto.severity && { severity: dto.severity }),
           ...(dto.assigneeId !== undefined && { assigneeId: dto.assigneeId }),
           ...(dto.taskId !== undefined && { taskId: dto.taskId }),
-          ...(dto.environment !== undefined && { environment: dto.environment }),
+          ...(dto.environment !== undefined && {
+            environment: dto.environment,
+          }),
           ...(dto.reproductionSteps !== undefined && {
             reproductionSteps: dto.reproductionSteps,
           }),
@@ -472,17 +479,17 @@ export class IssueService {
     });
 
     const notifyUserIds = new Set<string>();
-    if (issue!.assigneeId && issue!.assigneeId !== userId) {
-      notifyUserIds.add(issue!.assigneeId);
+    if (issue.assigneeId && issue.assigneeId !== userId) {
+      notifyUserIds.add(issue.assigneeId);
     }
-    if (issue!.reporterId && issue!.reporterId !== userId) {
-      notifyUserIds.add(issue!.reporterId);
+    if (issue.reporterId && issue.reporterId !== userId) {
+      notifyUserIds.add(issue.reporterId);
     }
 
     if (notifyUserIds.size > 0) {
       const [project, commenter] = await Promise.all([
         this.prisma.project.findUnique({
-          where: { id: issue!.projectId },
+          where: { id: issue.projectId },
           select: { projectCode: true },
         }),
         this.prisma.user.findUnique({
@@ -490,23 +497,28 @@ export class IssueService {
           select: { firstName: true, lastName: true },
         }),
       ]);
-      const commenterName = commenter ? `${commenter.firstName || ''} ${commenter.lastName || ''}`.trim() : 'Someone';
-      const cleanContent = comment.content.length > 50 ? `${comment.content.substring(0, 50)}...` : comment.content;
+      const commenterName = commenter
+        ? `${commenter.firstName || ''} ${commenter.lastName || ''}`.trim()
+        : 'Someone';
+      const cleanContent =
+        comment.content.length > 50
+          ? `${comment.content.substring(0, 50)}...`
+          : comment.content;
       const projectCode = project ? project.projectCode : 'PROJ';
 
       const notifications = Array.from(notifyUserIds).map((recipientId) => ({
         type: NotificationType.ISSUE_COMMENT,
         title: 'New Comment on Issue',
-        message: `${commenterName} commented on issue [${projectCode}-ISSUE-${issue!.issueNumber}]: "${cleanContent}"`,
+        message: `${commenterName} commented on issue [${projectCode}-ISSUE-${issue.issueNumber}]: "${cleanContent}"`,
         userId: recipientId,
-        actionUrl: `/projects/${issue!.projectId}/issues/${issue!.id}`,
+        actionUrl: `/projects/${issue.projectId}/issues/${issue.id}`,
         triggeredById: userId,
-        projectId: issue!.projectId,
-        issueId: issue!.id,
+        projectId: issue.projectId,
+        issueId: issue.id,
         organizationId: orgId,
         metadata: {
           projectCode,
-          issueNumber: issue!.issueNumber,
+          issueNumber: issue.issueNumber,
         },
       }));
       await this.notificationService.createNotificationsBulk(notifications);

@@ -27,7 +27,9 @@ export class AuthService {
 
     // 2. Hash the password
     const passwordHash = await argon2.hash(dto.password);
-    const orgName = dto.organizationName || (dto.firstName ? `${dto.firstName}'s Organization` : 'My Organization');
+    const orgName =
+      dto.organizationName ||
+      (dto.firstName ? `${dto.firstName}'s Organization` : 'My Organization');
 
     // 3. Create organization, settings, user, organization member, and admin role mapping inside a transaction
     const result = await this.prisma.$transaction(async (tx) => {
@@ -116,10 +118,28 @@ export class AuthService {
 
       // PM Profile permissions
       const pmPermissionNames = [
-        'CREATE_PROJECT', 'VIEW_PROJECT', 'EDIT_PROJECT', 'CREATE_TASK', 'VIEW_TASK', 'EDIT_TASK', 'ARCHIVE_TASK',
-        'LOG_TIME_ENTRY', 'ARCHIVE_TIME_ENTRY', 'VIEW_TIME_ENTRY', 'SUBMIT_TIMESHEET', 'APPROVE_TIMESHEET',
-        'CREATE_MILESTONE', 'VIEW_MILESTONE', 'EDIT_MILESTONE', 'ARCHIVE_MILESTONE', 'CREATE_ISSUE', 'VIEW_ISSUE',
-        'EDIT_ISSUE', 'ARCHIVE_ISSUE', 'COMMENT_ISSUE', 'VIEW_REPORT'
+        'CREATE_PROJECT',
+        'VIEW_PROJECT',
+        'EDIT_PROJECT',
+        'CREATE_TASK',
+        'VIEW_TASK',
+        'EDIT_TASK',
+        'ARCHIVE_TASK',
+        'LOG_TIME_ENTRY',
+        'ARCHIVE_TIME_ENTRY',
+        'VIEW_TIME_ENTRY',
+        'SUBMIT_TIMESHEET',
+        'APPROVE_TIMESHEET',
+        'CREATE_MILESTONE',
+        'VIEW_MILESTONE',
+        'EDIT_MILESTONE',
+        'ARCHIVE_MILESTONE',
+        'CREATE_ISSUE',
+        'VIEW_ISSUE',
+        'EDIT_ISSUE',
+        'ARCHIVE_ISSUE',
+        'COMMENT_ISSUE',
+        'VIEW_REPORT',
       ];
       await tx.profilePermission.createMany({
         data: allPermissions
@@ -132,8 +152,18 @@ export class AuthService {
 
       // Member Profile permissions
       const memberPermissionNames = [
-        'VIEW_PROJECT', 'CREATE_TASK', 'VIEW_TASK', 'EDIT_TASK', 'LOG_TIME_ENTRY', 'ARCHIVE_TIME_ENTRY',
-        'VIEW_TIME_ENTRY', 'SUBMIT_TIMESHEET', 'VIEW_MILESTONE', 'VIEW_ISSUE', 'CREATE_ISSUE', 'COMMENT_ISSUE'
+        'VIEW_PROJECT',
+        'CREATE_TASK',
+        'VIEW_TASK',
+        'EDIT_TASK',
+        'LOG_TIME_ENTRY',
+        'ARCHIVE_TIME_ENTRY',
+        'VIEW_TIME_ENTRY',
+        'SUBMIT_TIMESHEET',
+        'VIEW_MILESTONE',
+        'VIEW_ISSUE',
+        'CREATE_ISSUE',
+        'COMMENT_ISSUE',
       ];
       await tx.profilePermission.createMany({
         data: allPermissions
@@ -181,7 +211,10 @@ export class AuthService {
     }
 
     // 2. Check password
-    const passwordMatches = await argon2.verify(user.passwordHash, dto.password);
+    const passwordMatches = await argon2.verify(
+      user.passwordHash,
+      dto.password,
+    );
     if (!passwordMatches) {
       throw new ForbiddenException('Access Denied');
     }
@@ -243,7 +276,10 @@ export class AuthService {
 
   async acceptInvitation(dto: AcceptInviteDto): Promise<Tokens> {
     // 1. Compute SHA-256 hash of the token
-    const tokenHash = crypto.createHash('sha256').update(dto.token).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(dto.token)
+      .digest('hex');
 
     // 2. Find valid, non-deleted pending invitation
     const invitation = await this.prisma.invitation.findFirst({
@@ -389,7 +425,9 @@ export class AuthService {
     const roles = Array.from(new Set(userRoles.map((ur) => ur.role.name)));
     const permissions = Array.from(
       new Set(
-        userProfile?.profile?.profilePermissions?.map((pp) => pp.permission.name) || [],
+        userProfile?.profile?.profilePermissions?.map(
+          (pp) => pp.permission.name,
+        ) || [],
       ),
     );
 
@@ -410,11 +448,14 @@ export class AuthService {
 
     const [at, rt] = await Promise.all([
       this.jwtService.signAsync(jwtPayload, {
-        secret: process.env.JWT_ACCESS_SECRET || 'super-secret-jwt-access-key-12345',
+        secret:
+          process.env.JWT_ACCESS_SECRET || 'super-secret-jwt-access-key-12345',
         expiresIn: '15m',
       }),
       this.jwtService.signAsync(jwtPayload, {
-        secret: process.env.JWT_REFRESH_SECRET || 'super-secret-jwt-refresh-key-67890',
+        secret:
+          process.env.JWT_REFRESH_SECRET ||
+          'super-secret-jwt-refresh-key-67890',
         expiresIn: '7d',
       }),
     ]);

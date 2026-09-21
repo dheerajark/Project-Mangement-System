@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LogManualTimeDto } from './dto/log-manual-time.dto';
 import { StartTimerDto } from './dto/start-timer.dto';
@@ -15,7 +19,11 @@ export class TimeTrackingService {
     private notificationService: NotificationService,
   ) {}
 
-  async logManualTime(organizationId: string, userId: string, dto: LogManualTimeDto) {
+  async logManualTime(
+    organizationId: string,
+    userId: string,
+    dto: LogManualTimeDto,
+  ) {
     const project = await this.prisma.project.findFirst({
       where: { id: dto.projectId, organizationId, deletedAt: null },
       include: { settings: true },
@@ -26,7 +34,9 @@ export class TimeTrackingService {
     }
 
     if (!project.settings || !project.settings.allowTimeTracking) {
-      throw new ForbiddenException('Time tracking is disabled for this project');
+      throw new ForbiddenException(
+        'Time tracking is disabled for this project',
+      );
     }
 
     const entry = await this.prisma.timeEntry.create({
@@ -49,7 +59,10 @@ export class TimeTrackingService {
           taskId: dto.taskId,
           userId,
           action: 'TIME_LOGGED',
-          newValue: JSON.stringify({ hours: dto.hours, description: dto.description }),
+          newValue: JSON.stringify({
+            hours: dto.hours,
+            description: dto.description,
+          }),
         },
       });
     }
@@ -81,7 +94,9 @@ export class TimeTrackingService {
     }
 
     if (!project.settings || !project.settings.allowTimeTracking) {
-      throw new ForbiddenException('Time tracking is disabled for this project');
+      throw new ForbiddenException(
+        'Time tracking is disabled for this project',
+      );
     }
 
     // Active Timer Protection
@@ -93,7 +108,10 @@ export class TimeTrackingService {
       const now = new Date();
       const startedAt = activeTimer.timerStartedAt || activeTimer.createdAt;
       const durationMs = now.getTime() - startedAt.getTime();
-      const durationHours = Math.max(0.01, parseFloat((durationMs / (1000 * 60 * 60)).toFixed(3)));
+      const durationHours = Math.max(
+        0.01,
+        parseFloat((durationMs / (1000 * 60 * 60)).toFixed(3)),
+      );
 
       await this.prisma.timeEntry.update({
         where: { id: activeTimer.id },
@@ -110,7 +128,10 @@ export class TimeTrackingService {
             taskId: activeTimer.taskId,
             userId,
             action: 'TIMER_STOPPED',
-            newValue: JSON.stringify({ hours: durationHours, description: activeTimer.description }),
+            newValue: JSON.stringify({
+              hours: durationHours,
+              description: activeTimer.description,
+            }),
           },
         });
         await this.prisma.taskActivity.create({
@@ -118,7 +139,10 @@ export class TimeTrackingService {
             taskId: activeTimer.taskId,
             userId,
             action: 'TIME_LOGGED',
-            newValue: JSON.stringify({ hours: durationHours, description: activeTimer.description }),
+            newValue: JSON.stringify({
+              hours: durationHours,
+              description: activeTimer.description,
+            }),
           },
         });
       }
@@ -176,7 +200,10 @@ export class TimeTrackingService {
     const now = new Date();
     const startedAt = activeTimer.timerStartedAt || activeTimer.createdAt;
     const durationMs = now.getTime() - startedAt.getTime();
-    const durationHours = Math.max(0.01, parseFloat((durationMs / (1000 * 60 * 60)).toFixed(3)));
+    const durationHours = Math.max(
+      0.01,
+      parseFloat((durationMs / (1000 * 60 * 60)).toFixed(3)),
+    );
 
     const entry = await this.prisma.timeEntry.update({
       where: { id: activeTimer.id },
@@ -194,7 +221,10 @@ export class TimeTrackingService {
           taskId: entry.taskId,
           userId,
           action: 'TIMER_STOPPED',
-          newValue: JSON.stringify({ hours: durationHours, description: entry.description }),
+          newValue: JSON.stringify({
+            hours: durationHours,
+            description: entry.description,
+          }),
         },
       });
       await this.prisma.taskActivity.create({
@@ -202,7 +232,10 @@ export class TimeTrackingService {
           taskId: entry.taskId,
           userId,
           action: 'TIME_LOGGED',
-          newValue: JSON.stringify({ hours: durationHours, description: entry.description }),
+          newValue: JSON.stringify({
+            hours: durationHours,
+            description: entry.description,
+          }),
         },
       });
     }
@@ -237,7 +270,11 @@ export class TimeTrackingService {
     });
   }
 
-  async archiveTimeEntry(organizationId: string, userId: string, timeEntryId: string) {
+  async archiveTimeEntry(
+    organizationId: string,
+    userId: string,
+    timeEntryId: string,
+  ) {
     const entry = await this.prisma.timeEntry.findFirst({
       where: { id: timeEntryId, organizationId, deletedAt: null },
       include: { timesheet: true },
@@ -247,8 +284,14 @@ export class TimeTrackingService {
       throw new NotFoundException('Time entry not found');
     }
 
-    if (entry.timesheet && (entry.timesheet.status === 'SUBMITTED' || entry.timesheet.status === 'APPROVED')) {
-      throw new ForbiddenException('Cannot archive time entry linked to a submitted or approved timesheet');
+    if (
+      entry.timesheet &&
+      (entry.timesheet.status === 'SUBMITTED' ||
+        entry.timesheet.status === 'APPROVED')
+    ) {
+      throw new ForbiddenException(
+        'Cannot archive time entry linked to a submitted or approved timesheet',
+      );
     }
 
     const archived = await this.prisma.timeEntry.update({
@@ -282,9 +325,18 @@ export class TimeTrackingService {
     return archived;
   }
 
-  async getProjectTimeEntries(organizationId: string, userId: string, projectId: string) {
+  async getProjectTimeEntries(
+    organizationId: string,
+    userId: string,
+    projectId: string,
+  ) {
     return this.prisma.timeEntry.findMany({
-      where: { projectId, organizationId, isTimerRunning: false, deletedAt: null },
+      where: {
+        projectId,
+        organizationId,
+        isTimerRunning: false,
+        deletedAt: null,
+      },
       include: {
         user: {
           select: { id: true, firstName: true, lastName: true, email: true },
@@ -318,7 +370,7 @@ export class TimeTrackingService {
     },
   ) {
     const canViewAll = userPermissions.includes('APPROVE_TIMESHEET');
-    
+
     const whereClause: any = {
       organizationId,
       isTimerRunning: false,
@@ -381,8 +433,11 @@ export class TimeTrackingService {
     });
   }
 
-
-  async getTaskTimeEntries(organizationId: string, userId: string, taskId: string) {
+  async getTaskTimeEntries(
+    organizationId: string,
+    userId: string,
+    taskId: string,
+  ) {
     return this.prisma.timeEntry.findMany({
       where: { taskId, organizationId, isTimerRunning: false, deletedAt: null },
       include: {
@@ -394,7 +449,11 @@ export class TimeTrackingService {
     });
   }
 
-  async submitTimesheet(organizationId: string, userId: string, dto: SubmitTimesheetDto) {
+  async submitTimesheet(
+    organizationId: string,
+    userId: string,
+    dto: SubmitTimesheetDto,
+  ) {
     const start = new Date(dto.startDate);
     const end = new Date(dto.endDate);
 
@@ -408,8 +467,14 @@ export class TimeTrackingService {
       },
     });
 
-    if (existingTimesheet && (existingTimesheet.status === 'APPROVED' || existingTimesheet.status === 'SUBMITTED')) {
-      throw new ForbiddenException('A timesheet is already submitted or approved for this period');
+    if (
+      existingTimesheet &&
+      (existingTimesheet.status === 'APPROVED' ||
+        existingTimesheet.status === 'SUBMITTED')
+    ) {
+      throw new ForbiddenException(
+        'A timesheet is already submitted or approved for this period',
+      );
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -422,7 +487,9 @@ export class TimeTrackingService {
           deletedAt: null,
           OR: [
             { timesheetId: null },
-            ...(existingTimesheet ? [{ timesheetId: existingTimesheet.id }] : []),
+            ...(existingTimesheet
+              ? [{ timesheetId: existingTimesheet.id }]
+              : []),
           ],
         },
       });
@@ -458,7 +525,10 @@ export class TimeTrackingService {
           entityType: 'Timesheet',
           entityId: timesheetId,
           action: 'TIMESHEET_SUBMITTED',
-          newValue: JSON.stringify({ timesheetId, entriesCount: timeEntries.length }),
+          newValue: JSON.stringify({
+            timesheetId,
+            entriesCount: timeEntries.length,
+          }),
         },
       });
 
@@ -491,7 +561,9 @@ export class TimeTrackingService {
         where: { id: userId },
         select: { firstName: true, lastName: true },
       });
-      const submitterName = submitter ? `${submitter.firstName} ${submitter.lastName}`.trim() : 'A member';
+      const submitterName = submitter
+        ? `${submitter.firstName} ${submitter.lastName}`.trim()
+        : 'A member';
       const formattedStart = start.toISOString().split('T')[0];
       const formattedEnd = end.toISOString().split('T')[0];
 
@@ -516,7 +588,12 @@ export class TimeTrackingService {
     return result;
   }
 
-  async approveTimesheet(organizationId: string, userId: string, timesheetId: string, dto: ApproveTimesheetDto) {
+  async approveTimesheet(
+    organizationId: string,
+    userId: string,
+    timesheetId: string,
+    dto: ApproveTimesheetDto,
+  ) {
     const timesheet = await this.prisma.timesheet.findFirst({
       where: { id: timesheetId, organizationId, deletedAt: null },
     });
@@ -526,7 +603,9 @@ export class TimeTrackingService {
     }
 
     if (timesheet.status !== 'SUBMITTED') {
-      throw new ForbiddenException('Only submitted timesheets can be approved or rejected');
+      throw new ForbiddenException(
+        'Only submitted timesheets can be approved or rejected',
+      );
     }
 
     const updated = await this.prisma.timesheet.update({
@@ -544,7 +623,10 @@ export class TimeTrackingService {
         userId,
         entityType: 'Timesheet',
         entityId: timesheetId,
-        action: dto.action === 'APPROVE' ? 'TIMESHEET_APPROVED' : 'TIMESHEET_REJECTED',
+        action:
+          dto.action === 'APPROVE'
+            ? 'TIMESHEET_APPROVED'
+            : 'TIMESHEET_REJECTED',
         newValue: JSON.stringify(updated),
       },
     });
@@ -555,7 +637,9 @@ export class TimeTrackingService {
       const isApproved = updated.status === 'APPROVED';
 
       await this.notificationService.createNotification({
-        type: isApproved ? NotificationType.TIMESHEET_APPROVED : NotificationType.TIMESHEET_REJECTED,
+        type: isApproved
+          ? NotificationType.TIMESHEET_APPROVED
+          : NotificationType.TIMESHEET_REJECTED,
         title: isApproved ? 'Timesheet Approved' : 'Timesheet Rejected',
         message: `Your timesheet for period ${formattedStart} to ${formattedEnd} has been ${updated.status.toLowerCase()}${updated.approvalComment ? `: "${updated.approvalComment}"` : ''}`,
         userId: timesheet.userId,
@@ -574,7 +658,11 @@ export class TimeTrackingService {
     return updated;
   }
 
-  async getTimesheets(organizationId: string, userId: string, userPermissions: string[]) {
+  async getTimesheets(
+    organizationId: string,
+    userId: string,
+    userPermissions: string[],
+  ) {
     const canApprove = userPermissions.includes('APPROVE_TIMESHEET');
     const whereClause: any = {
       organizationId,

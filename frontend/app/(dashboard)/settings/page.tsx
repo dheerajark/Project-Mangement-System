@@ -24,12 +24,16 @@ import {
   Shield,
   Loader2,
   Lock,
+  GitMerge,
   Sliders,
 } from 'lucide-react';
 import Link from 'next/link';
 import NotificationBell from '@/components/notification-bell';
 import Header from '@/components/header';
 import { useFormatDate } from '@/hooks/useFormatDate';
+import RolesTab from '@/components/roles-tab';
+import ProfilesTab from '@/components/profiles-tab';
+import CustomFieldsTab from '@/components/custom-fields-tab';
 
 // Collapsible permissions categories mapping
 const PERMISSION_GROUPS: Record<string, string[]> = {
@@ -47,7 +51,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const formatDate = useFormatDate();
-  const [activeTab, setActiveTab] = useState<'general' | 'members' | 'invitations' | 'audit' | 'profiles'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'members' | 'roles' | 'profiles' | 'custom-fields' | 'invitations' | 'audit'>('general');
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
 
   // Profile Form States
@@ -407,6 +411,39 @@ export default function SettingsPage() {
               Member Management
             </button>
             <button
+              onClick={() => setActiveTab('roles')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                activeTab === 'roles'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              }`}
+            >
+              <GitMerge className="w-4 h-4" />
+              Roles & Hierarchy
+            </button>
+            <button
+              onClick={() => setActiveTab('profiles')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                activeTab === 'profiles'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              }`}
+            >
+              <Shield className="w-4 h-4" />
+              Profiles & Permissions
+            </button>
+            <button
+              onClick={() => setActiveTab('custom-fields')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                activeTab === 'custom-fields'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+              }`}
+            >
+              <Sliders className="w-4 h-4" />
+              Task Custom Fields
+            </button>
+            <button
               onClick={() => setActiveTab('invitations')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-150 ${
                 activeTab === 'invitations'
@@ -427,17 +464,6 @@ export default function SettingsPage() {
             >
               <FileText className="w-4 h-4" />
               Audit Logs
-            </button>
-            <button
-              onClick={() => setActiveTab('profiles')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-150 ${
-                activeTab === 'profiles'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-              }`}
-            >
-              <Shield className="w-4 h-4" />
-              Profiles & Permissions
             </button>
           </div>
         </aside>
@@ -887,383 +913,11 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {activeTab === 'profiles' && (
-            <div className="space-y-8 animate-in fade-in duration-300">
-              {/* Info banner about caching */}
-              <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800 rounded-2xl p-6 md:p-8 space-y-4 shadow-xl">
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-xl">
-                    <Info className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-100">Profiles & Permissions Manager</h3>
-                    <p className="text-slate-400 text-xs mt-1">
-                      Manage object and action-level security profiles. Assign profiles to users to govern what actions they can perform.
-                    </p>
-                    <p className="text-slate-500 text-[11px] mt-2 font-medium">
-                      💡 <strong>Note on Refresh Cycle</strong>: When changes are made, active sessions will force-refresh their tokens automatically on their next action. Administrators can also clone from standard profiles to create custom overrides.
-                    </p>
-                  </div>
-                </div>
-              </div>
+          {activeTab === 'roles' && <RolesTab canManage={canManage} />}
 
-              {profileErrorMessage && (
-                <div className="bg-red-950/40 border border-red-800 text-red-300 text-sm p-4 rounded-xl flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-                    <span>{profileErrorMessage}</span>
-                  </div>
-                  <button 
-                    onClick={() => setProfileErrorMessage(null)} 
-                    className="text-xs text-red-400 hover:text-red-300 font-semibold px-2 py-1 rounded hover:bg-red-500/10 transition-all"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              )}
+          {activeTab === 'profiles' && <ProfilesTab canManage={canManage} />}
 
-              {/* Profiles Header Actions */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-100">Profiles</h3>
-                  <p className="text-slate-400 text-xs mt-0.5">Custom and standard templates currently configured.</p>
-                </div>
-                <button
-                  onClick={() => setIsCreateProfileOpen(true)}
-                  className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-semibold shadow-lg active:scale-95 transition-all flex items-center gap-1.5"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Create Profile
-                </button>
-              </div>
-
-              {/* Profiles Accordion List */}
-              {isLoadingProfiles || isLoadingPermissions ? (
-                <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /></div>
-              ) : (
-                <div className="space-y-6">
-                  {profiles?.map((profile: any) => {
-                    const isGlobalTemplate = profile.organizationId === null;
-                    const isSystemAdmin = profile.isSystem && profile.name === 'Admin Profile';
-
-                    // Group permissions count
-                    const getActiveCount = (groupName: string, perms: string[]) => {
-                      return perms.filter((pName) => {
-                        return profile.profilePermissions.some((pp: any) => pp.permission.name === pName);
-                      }).length;
-                    };
-
-                    const getPermObjByName = (pName: string) => {
-                      return systemPermissions?.find((p: any) => p.name === pName);
-                    };
-
-                    const isPermActive = (pName: string) => {
-                      return profile.profilePermissions.some((pp: any) => pp.permission.name === pName);
-                    };
-
-                    const handlePermissionToggle = async (pName: string) => {
-                      setProfileErrorMessage(null);
-                      const permObj = getPermObjByName(pName);
-                      if (!permObj) return;
-
-                      const currentlyActive = isPermActive(pName);
-
-                      togglePermissionMutation.mutate({
-                        profileId: profile.id,
-                        permissionId: permObj.id,
-                        active: !currentlyActive,
-                      });
-                    };
-
-                    // final list of groups mapping dynamically
-                    const allGroupedPerms = Object.values(PERMISSION_GROUPS).flat();
-                    const ungroupedPerms = systemPermissions?.filter((p: any) => !allGroupedPerms.includes(p.name)).map((p: any) => p.name) || [];
-                    const finalGroups = {
-                      ...PERMISSION_GROUPS,
-                      ...(ungroupedPerms.length > 0 ? { 'Other Permissions': ungroupedPerms } : {}),
-                    };
-
-                    return (
-                      <div 
-                        key={profile.id} 
-                        className={`bg-slate-900/20 border rounded-2xl shadow-xl transition-all duration-300 ${
-                          isSystemAdmin
-                            ? 'border-indigo-900/30'
-                            : isGlobalTemplate
-                            ? 'border-slate-800'
-                            : 'border-emerald-900/30 hover:border-emerald-800/40'
-                        }`}
-                      >
-                        {/* Profile Header */}
-                        <div className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-900">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-base font-bold text-slate-100">{profile.name}</h4>
-                              <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${
-                                isSystemAdmin
-                                  ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
-                                  : isGlobalTemplate
-                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                              }`}>
-                                {isSystemAdmin ? 'System Admin' : isGlobalTemplate ? 'Global Template' : 'Custom Profile'}
-                              </span>
-                            </div>
-                            <p className="text-slate-400 text-xs mt-1.5">{profile.description || 'No description provided.'}</p>
-                          </div>
-
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setCloneSourceProfile(profile);
-                                setCloneNewName(`${profile.name} Clone`);
-                                setCloneNewDesc(`Cloned from ${profile.name}`);
-                              }}
-                              className="px-3 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-200 text-xs font-semibold rounded-xl active:scale-95 transition-all flex items-center gap-1"
-                            >
-                              <Copy className="w-3 h-3" />
-                              Clone
-                            </button>
-                            {!profile.isSystem && !isGlobalTemplate && (
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Are you sure you want to archive "${profile.name}"? Active users will automatically fall back to standard Member Profile.`)) {
-                                    archiveProfileMutation.mutate(profile.id);
-                                  }
-                                }}
-                                className="px-3 py-1.5 bg-red-950/20 hover:bg-red-950/40 border border-red-900/30 text-red-400 text-xs font-semibold rounded-xl active:scale-95 transition-all flex items-center gap-1"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                Archive
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Collapsible Groups Container */}
-                        <div className="p-4 space-y-3 bg-slate-950/20 rounded-b-2xl">
-                          {Object.entries(finalGroups).map(([groupName, perms]) => {
-                            const activeCount = getActiveCount(groupName, perms);
-                            const totalCount = perms.length;
-                            const sectionKey = `${profile.id}_${groupName}`;
-                            const isExpanded = !!expandedSections[sectionKey];
-
-                            return (
-                              <div key={groupName} className="border border-slate-900 bg-slate-900/10 rounded-xl overflow-hidden">
-                                {/* Accordion Header */}
-                                <button
-                                  onClick={() => setExpandedSections(prev => ({ ...prev, [sectionKey]: !isExpanded }))}
-                                  className="w-full flex justify-between items-center px-4 py-3 bg-slate-900/40 hover:bg-slate-900/60 transition-colors text-left"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-slate-200">{groupName}</span>
-                                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
-                                      activeCount === totalCount
-                                        ? 'bg-emerald-500/10 text-emerald-400'
-                                        : activeCount > 0
-                                        ? 'bg-indigo-500/10 text-indigo-400'
-                                        : 'bg-slate-800 text-slate-500'
-                                    }`}>
-                                      {activeCount} of {totalCount} active
-                                    </span>
-                                  </div>
-                                  {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
-                                </button>
-
-                                {/* Accordion Content (Permissions List) */}
-                                {isExpanded && (
-                                  <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 bg-slate-950/40 border-t border-slate-900">
-                                    {perms.map((pName: string) => {
-                                      const pObj = getPermObjByName(pName);
-                                      if (!pObj) return null;
-
-                                      const active = isPermActive(pName);
-                                      const isLocked = isSystemAdmin || isGlobalTemplate;
-
-                                      return (
-                                        <label
-                                          key={pObj.id}
-                                          className={`flex items-start gap-3 p-3 border rounded-xl select-none transition-all ${
-                                            active
-                                              ? 'bg-emerald-500/5 border-emerald-900/30 text-slate-200'
-                                              : 'bg-slate-900/10 border-slate-900 text-slate-400 hover:border-slate-800'
-                                          } ${isLocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            disabled={isLocked || togglePermissionMutation.isPending}
-                                            checked={active}
-                                            onChange={() => handlePermissionToggle(pName)}
-                                            className="mt-1 h-3.5 w-3.5 rounded border-slate-800 bg-slate-900 text-emerald-600 focus:ring-emerald-500/30"
-                                          />
-                                          <div>
-                                            <div className="flex items-center gap-1.5">
-                                              <span className="text-xs font-bold font-mono tracking-wide">{pObj.name}</span>
-                                              {isLocked && <Lock className="w-2.5 h-2.5 text-slate-500" />}
-                                            </div>
-                                            <p className="text-[10px] text-slate-500 mt-1 leading-normal">{pObj.description}</p>
-                                          </div>
-                                        </label>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Create Profile Modal */}
-              {isCreateProfileOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4">
-                  <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl relative">
-                    <button
-                      onClick={() => {
-                        setIsCreateProfileOpen(false);
-                        setProfileErrorMessage(null);
-                      }}
-                      className="absolute top-4 right-4 text-slate-500 hover:text-slate-300"
-                    >
-                      ✕
-                    </button>
-                    <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                      <Shield className="w-5 h-5 text-indigo-400" />
-                      Create Custom Profile
-                    </h3>
-                    <p className="text-slate-400 text-xs mt-1">Add a new profile name and description.</p>
-
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        if (!newProfileName) return;
-                        createProfileMutation.mutate({ name: newProfileName, description: newProfileDesc });
-                        setIsCreateProfileOpen(false);
-                        setNewProfileName('');
-                        setNewProfileDesc('');
-                      }}
-                      className="space-y-4 mt-6"
-                    >
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Profile Name</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Guest Developer"
-                          value={newProfileName}
-                          onChange={(e) => setNewProfileName(e.target.value)}
-                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Description</label>
-                        <textarea
-                          placeholder="Provide a description of this profile's scope..."
-                          value={newProfileDesc}
-                          onChange={(e) => setNewProfileDesc(e.target.value)}
-                          rows={3}
-                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
-                        />
-                      </div>
-                      <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsCreateProfileOpen(false);
-                            setProfileErrorMessage(null);
-                          }}
-                          className="px-4 py-2 bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-300 text-xs font-semibold rounded-xl transition-all"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={createProfileMutation.isPending}
-                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-all"
-                        >
-                          {createProfileMutation.isPending ? 'Creating...' : 'Create'}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              )}
-
-              {/* Clone Profile Modal */}
-              {cloneSourceProfile && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4">
-                  <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl relative">
-                    <button
-                      onClick={() => setCloneSourceProfile(null)}
-                      className="absolute top-4 right-4 text-slate-500 hover:text-slate-300"
-                    >
-                      ✕
-                    </button>
-                    <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                      <Copy className="w-5 h-5 text-emerald-400" />
-                      Clone Profile: {cloneSourceProfile.name}
-                    </h3>
-                    <p className="text-slate-400 text-xs mt-1">Copy all settings and permissions into a new custom profile.</p>
-
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        if (!cloneNewName) return;
-                        cloneProfileMutation.mutate({
-                          profileId: cloneSourceProfile.id,
-                          data: { name: cloneNewName, description: cloneNewDesc },
-                        });
-                        setCloneSourceProfile(null);
-                        setCloneNewName('');
-                        setCloneNewDesc('');
-                      }}
-                      className="space-y-4 mt-6"
-                    >
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">New Profile Name</label>
-                        <input
-                          type="text"
-                          required
-                          value={cloneNewName}
-                          onChange={(e) => setCloneNewName(e.target.value)}
-                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Description</label>
-                        <textarea
-                          value={cloneNewDesc}
-                          onChange={(e) => setCloneNewDesc(e.target.value)}
-                          rows={3}
-                          className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-sm"
-                        />
-                      </div>
-                      <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                        <button
-                          type="button"
-                          onClick={() => setCloneSourceProfile(null)}
-                          className="px-4 py-2 bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-300 text-xs font-semibold rounded-xl transition-all"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={cloneProfileMutation.isPending}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition-all"
-                        >
-                          {cloneProfileMutation.isPending ? 'Cloning...' : 'Clone'}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {activeTab === 'custom-fields' && <CustomFieldsTab canManage={canManage} />}
         </section>
       </main>
     </div>

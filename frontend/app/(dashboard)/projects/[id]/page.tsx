@@ -41,9 +41,15 @@ import {
   PieChart,
   TrendingUp,
   Flag,
+  ShieldAlert,
+  Layers,
+  Pencil,
+  SlidersHorizontal,
+  Repeat,
 } from 'lucide-react';
 import Link from 'next/link';
 import TaskDetailDrawer from '@/components/task-detail-drawer';
+import TasksTab from '@/components/tasks-tab';
 import KanbanBoard from '@/components/kanban-board';
 import TimeLogsTab from '@/components/time-logs-tab';
 import MilestonesTab from '@/components/milestones-tab';
@@ -51,6 +57,11 @@ import IssuesTab from '@/components/issues-tab';
 import NotificationBell from '@/components/notification-bell';
 import Header from '@/components/header';
 import ReportsTab from '@/components/reports-tab';
+import DocumentsTab from '@/components/documents-tab';
+import CreateProjectModal from '@/components/create-project-modal';
+import AddUserModal from '@/components/add-user-modal';
+import EditMemberModal from '@/components/edit-member-modal';
+import ConfigureTabsModal, { DEFAULT_ENABLED_TABS } from '@/components/configure-tabs-modal';
 import { useFormatDate } from '@/hooks/useFormatDate';
 
 export default function ProjectDetailsPage() {
@@ -63,9 +74,10 @@ export default function ProjectDetailsPage() {
   const formatDate = useFormatDate();
 
   // Navigation Tabs State
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'members' | 'timeLogs' | 'milestones' | 'issues' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'members' | 'timeLogs' | 'milestones' | 'issues' | 'documents' | 'reports'>('overview');
 
   // Component UI State (Project Info)
+  const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [infoName, setInfoName] = useState('');
   const [infoDescription, setInfoDescription] = useState('');
@@ -84,7 +96,11 @@ export default function ProjectDetailsPage() {
   const [infoTaskLayout, setInfoTaskLayout] = useState('STANDARD');
   const [infoError, setInfoError] = useState<string | null>(null);
 
-  // Add Member State
+  // Add Member / Edit Member Modal States
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<any | null>(null);
+  const [memberRoleFilter, setMemberRoleFilter] = useState<string>('ALL');
+  const [memberSearchQuery, setMemberSearchQuery] = useState<string>('');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedMemberRole, setSelectedMemberRole] = useState<'OWNER' | 'MANAGER' | 'MEMBER'>('MEMBER');
   const [memberError, setMemberError] = useState<string | null>(null);
@@ -106,17 +122,55 @@ export default function ProjectDetailsPage() {
   const [createTaskType, setCreateTaskType] = useState<'TASK' | 'BUG' | 'STORY' | 'IMPROVEMENT'>('TASK');
   const [createTaskAssigneeId, setCreateTaskAssigneeId] = useState('');
   const [createTaskEstimatedHours, setCreateTaskEstimatedHours] = useState<number | null>(null);
+  const [createTaskStartDate, setCreateTaskStartDate] = useState('');
   const [createTaskDueDate, setCreateTaskDueDate] = useState('');
   const [createTaskMilestoneId, setCreateTaskMilestoneId] = useState('');
+  const [createTaskTaskListId, setCreateTaskTaskListId] = useState('');
   const [createTaskError, setCreateTaskError] = useState<string | null>(null);
+  const [createTaskSuccess, setCreateTaskSuccess] = useState<string | null>(null);
   const [autoOpenCreateMilestoneModal, setAutoOpenCreateMilestoneModal] = useState(false);
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
   const [reorderError, setReorderError] = useState<string | null>(null);
 
-  const handleOpenCreateTaskModalWithMilestone = (milestoneId?: string) => {
-    if (milestoneId) {
-      setCreateTaskMilestoneId(milestoneId);
+  // Create Task Recurrence State
+  const [createTaskIsRecurring, setCreateTaskIsRecurring] = useState(false);
+  const [createTaskFrequency, setCreateTaskFrequency] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'>('WEEKLY');
+  const [createTaskInterval, setCreateTaskInterval] = useState(1);
+  const [createTaskDaysOfWeek, setCreateTaskDaysOfWeek] = useState<number[]>([1]);
+  const [createTaskDayOfMonth, setCreateTaskDayOfMonth] = useState(1);
+  const [createTaskNonWorkingDayAction, setCreateTaskNonWorkingDayAction] = useState<'NEXT_WORKING_DAY' | 'PREVIOUS_WORKING_DAY' | 'EXACT_DATE'>('NEXT_WORKING_DAY');
+  const [createTaskEndType, setCreateTaskEndType] = useState<'NEVER' | 'ON_DATE' | 'AFTER_OCCURRENCES'>('NEVER');
+  const [createTaskEndDate, setCreateTaskEndDate] = useState('');
+  const [createTaskMaxOccurrences, setCreateTaskMaxOccurrences] = useState(10);
+  const [createTaskCloneSubtasks, setCreateTaskCloneSubtasks] = useState(true);
+
+  // Tab Customization Modal State
+  const [isConfigureTabsModalOpen, setIsConfigureTabsModalOpen] = useState(false);
+  const [userCustomTabs, setUserCustomTabs] = useState<string[] | null>(null);
+
+  // Load user custom tabs preference from localStorage on mount/projectId change
+  useEffect(() => {
+    if (!projectId || typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem(`pms_project_${projectId}_tabs`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setUserCustomTabs(parsed);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse saved tabs from localStorage', e);
     }
+  }, [projectId]);
+
+  const handleOpenCreateTaskModal = (taskListId?: string, milestoneId?: string) => {
+    setCreateTaskTaskListId(taskListId || '');
+    setCreateTaskMilestoneId(milestoneId || '');
+    setCreateTaskStartDate('');
+    setCreateTaskDueDate('');
+    setCreateTaskError(null);
+    setCreateTaskSuccess(null);
     setIsCreateTaskModalOpen(true);
   };
 
@@ -135,7 +189,7 @@ export default function ProjectDetailsPage() {
     const issueId = searchParams.get('issueId');
 
     if (tab) {
-      if (['overview', 'tasks', 'members', 'timeLogs', 'milestones', 'issues', 'reports'].includes(tab)) {
+      if (['overview', 'tasks', 'members', 'timeLogs', 'milestones', 'issues', 'documents', 'reports'].includes(tab)) {
         setActiveTab(tab as any);
       }
     } else if (taskId) {
@@ -160,6 +214,34 @@ export default function ProjectDetailsPage() {
     enabled: isAuthenticated && !!projectId,
   });
 
+  // Enabled tabs resolution: localStorage personal preference -> project.settings.enabledTabs -> default
+  const enabledTabs: string[] = React.useMemo(() => {
+    if (userCustomTabs && userCustomTabs.length > 0) {
+      return Array.from(new Set(['overview', ...userCustomTabs]));
+    }
+    if (project?.settings?.enabledTabs) {
+      try {
+        const parsed = typeof project.settings.enabledTabs === 'string'
+          ? JSON.parse(project.settings.enabledTabs)
+          : project.settings.enabledTabs;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return Array.from(new Set(['overview', ...parsed]));
+        }
+      } catch {
+        const split = project.settings.enabledTabs.split(',').map((s: string) => s.trim()).filter(Boolean);
+        if (split.length > 0) return Array.from(new Set(['overview', ...split]));
+      }
+    }
+    return DEFAULT_ENABLED_TABS;
+  }, [userCustomTabs, project?.settings?.enabledTabs]);
+
+  // Keep activeTab aligned with enabled tabs
+  useEffect(() => {
+    if (!enabledTabs.includes(activeTab)) {
+      setActiveTab('overview');
+    }
+  }, [enabledTabs, activeTab]);
+
   // Fetch Tasks for Project Query
   const { data: tasks, isLoading: isLoadingTasks } = useQuery({
     queryKey: ['tasks', projectId],
@@ -175,6 +257,16 @@ export default function ProjectDetailsPage() {
     queryKey: ['milestones', projectId],
     queryFn: async () => {
       const res = await api.get(`/projects/${projectId}/milestones`);
+      return res.data;
+    },
+    enabled: isAuthenticated && !!projectId,
+  });
+
+  // Fetch Task Lists Query
+  const { data: taskLists = [], isLoading: isLoadingTaskLists } = useQuery({
+    queryKey: ['task-lists', projectId],
+    queryFn: async () => {
+      const res = await api.get(`/projects/${projectId}/task-lists`);
       return res.data;
     },
     enabled: isAuthenticated && !!projectId,
@@ -346,6 +438,7 @@ export default function ProjectDetailsPage() {
       allowTimeTracking?: boolean;
       allowIssueTracking?: boolean;
       allowFileUploads?: boolean;
+      enabledTabs?: string;
     }) => {
       const res = await api.patch(`/projects/${projectId}/settings`, data);
       return res.data;
@@ -389,24 +482,52 @@ export default function ProjectDetailsPage() {
 
   // Create Task Mutation
   const createTaskMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await api.post('/tasks', data);
-      return res.data;
+    mutationFn: async ({ payload, addAnother }: { payload: any; addAnother: boolean }) => {
+      const res = await api.post('/tasks', payload);
+      return { data: res.data, addAnother };
     },
-    onSuccess: () => {
+    onSuccess: ({ addAnother }) => {
       queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['task-lists', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['board', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       queryClient.invalidateQueries({ queryKey: ['milestones', projectId] });
-      setIsCreateTaskModalOpen(false);
-      setCreateTaskTitle('');
-      setCreateTaskDescription('');
-      setCreateTaskPriority('MEDIUM');
-      setCreateTaskType('TASK');
-      setCreateTaskAssigneeId('');
-      setCreateTaskEstimatedHours(null);
-      setCreateTaskDueDate('');
-      setCreateTaskMilestoneId('');
-      setCreateTaskError(null);
+      queryClient.invalidateQueries({ queryKey: ['global-tasks'] });
+
+      if (addAnother) {
+        setCreateTaskTitle('');
+        setCreateTaskDescription('');
+        setCreateTaskEstimatedHours(null);
+        setCreateTaskStartDate('');
+        setCreateTaskDueDate('');
+        setCreateTaskError(null);
+        setCreateTaskSuccess('Task created successfully! Ready for the next task.');
+        setTimeout(() => setCreateTaskSuccess(null), 3000);
+      } else {
+        setIsCreateTaskModalOpen(false);
+        setCreateTaskTitle('');
+        setCreateTaskDescription('');
+        setCreateTaskPriority('MEDIUM');
+        setCreateTaskType('TASK');
+        setCreateTaskAssigneeId('');
+        setCreateTaskEstimatedHours(null);
+        setCreateTaskStartDate('');
+        setCreateTaskDueDate('');
+        setCreateTaskMilestoneId('');
+        setCreateTaskTaskListId('');
+        setCreateTaskIsRecurring(false);
+        setCreateTaskFrequency('WEEKLY');
+        setCreateTaskInterval(1);
+        setCreateTaskDaysOfWeek([1]);
+        setCreateTaskDayOfMonth(1);
+        setCreateTaskNonWorkingDayAction('NEXT_WORKING_DAY');
+        setCreateTaskEndType('NEVER');
+        setCreateTaskEndDate('');
+        setCreateTaskMaxOccurrences(10);
+        setCreateTaskCloneSubtasks(true);
+        setCreateTaskError(null);
+        setCreateTaskSuccess(null);
+      }
     },
     onError: (err: any) => {
       setCreateTaskError(err.response?.data?.message || 'Failed to create task');
@@ -459,24 +580,65 @@ export default function ProjectDetailsPage() {
     });
   };
 
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleCreateTask = (e: React.FormEvent, addAnother: boolean = false) => {
     e.preventDefault();
     setCreateTaskError(null);
     if (!createTaskTitle.trim()) {
       setCreateTaskError('Task title is required');
       return;
     }
+    if (createTaskStartDate && createTaskDueDate && new Date(createTaskStartDate) > new Date(createTaskDueDate)) {
+      setCreateTaskError('Start date cannot be after due date.');
+      return;
+    }
+
+    const recurrencePayload = createTaskIsRecurring
+      ? {
+          frequency: createTaskFrequency,
+          interval: createTaskInterval,
+          daysOfWeek: createTaskFrequency === 'WEEKLY' ? createTaskDaysOfWeek.join(',') : undefined,
+          dayOfMonth: createTaskFrequency === 'MONTHLY' ? createTaskDayOfMonth : undefined,
+          nonWorkingDayAction: createTaskNonWorkingDayAction,
+          endType: createTaskEndType,
+          endDate: createTaskEndType === 'ON_DATE' && createTaskEndDate ? new Date(createTaskEndDate).toISOString() : undefined,
+          maxOccurrences: createTaskEndType === 'AFTER_OCCURRENCES' ? createTaskMaxOccurrences : undefined,
+          cloneSubtasks: createTaskCloneSubtasks,
+        }
+      : undefined;
+
     createTaskMutation.mutate({
-      title: createTaskTitle.trim(),
-      description: createTaskDescription.trim() || null,
-      priority: createTaskPriority,
-      type: createTaskType,
-      assigneeId: createTaskAssigneeId || null,
-      estimatedHours: createTaskEstimatedHours,
-      dueDate: createTaskDueDate || null,
-      projectId,
-      milestoneId: createTaskMilestoneId || null,
+      payload: {
+        title: createTaskTitle.trim(),
+        description: createTaskDescription.trim() || null,
+        priority: createTaskPriority,
+        type: createTaskType,
+        assigneeId: createTaskAssigneeId || null,
+        estimatedHours: createTaskEstimatedHours,
+        startDate: createTaskStartDate || null,
+        dueDate: createTaskDueDate || null,
+        projectId,
+        milestoneId: createTaskMilestoneId || null,
+        taskListId: createTaskTaskListId || null,
+        recurrence: recurrencePayload,
+      },
+      addAnother,
     });
+  };
+
+  const handleSaveTabs = async (newTabs: string[]) => {
+    const sanitized = Array.from(new Set(['overview', ...newTabs]));
+    try {
+      localStorage.setItem(`pms_project_${projectId}_tabs`, JSON.stringify(sanitized));
+      setUserCustomTabs(sanitized);
+    } catch (e) {
+      console.error('Failed to save tabs to localStorage', e);
+    }
+
+    if (canEdit) {
+      await updateSettingsMutation.mutateAsync({
+        enabledTabs: JSON.stringify(sanitized),
+      });
+    }
   };
 
   if (isLoading || isLoadingProject) {
@@ -639,104 +801,149 @@ export default function ProjectDetailsPage() {
           </div>
         )}
 
-        {/* Dynamic Tab Selector */}
-        <div className="flex border-b border-slate-900 gap-6">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative ${
-              activeTab === 'overview' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Overview
-            {activeTab === 'overview' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
-            )}
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('tasks')}
-            className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
-              activeTab === 'tasks' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Tasks
-            <span className="px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded font-mono text-[10px] text-slate-400">
-              {tasks?.length || 0}
-            </span>
-            {activeTab === 'tasks' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('members')}
-            className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
-              activeTab === 'members' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Members
-            <span className="px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded font-mono text-[10px] text-slate-400">
-              {project.members.length}
-            </span>
-            {activeTab === 'members' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('milestones')}
-            className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
-              activeTab === 'milestones' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Milestones
-            <span className="px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded font-mono text-[10px] text-slate-400">
-              {milestones?.length || 0}
-            </span>
-            {activeTab === 'milestones' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
-            )}
-          </button>
-
-          {project.settings?.allowIssueTracking !== false && (
+        {/* Dynamic Tab Selector with Customize Tabs button */}
+        <div className="flex items-center justify-between border-b border-slate-900 overflow-x-auto">
+          <div className="flex gap-6 min-w-max">
+            {/* Overview Tab (Always enabled) */}
             <button
-              onClick={() => setActiveTab('issues')}
-              className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
-                activeTab === 'issues' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
+              onClick={() => setActiveTab('overview')}
+              className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative ${
+                activeTab === 'overview' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Issues
-              {activeTab === 'issues' && (
+              Overview
+              {activeTab === 'overview' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
               )}
             </button>
-          )}
-
-          {project.settings?.allowTimeTracking && (
-            <button
-              onClick={() => setActiveTab('timeLogs')}
-              className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
-                activeTab === 'timeLogs' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Time Logs
-              {activeTab === 'timeLogs' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
-              )}
-            </button>
-          )}
-
-          <button
-            onClick={() => setActiveTab('reports')}
-            className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
-              activeTab === 'reports' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Reports
-            {activeTab === 'reports' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+            
+            {/* Tasks Tab */}
+            {enabledTabs.includes('tasks') && (
+              <button
+                onClick={() => setActiveTab('tasks')}
+                className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
+                  activeTab === 'tasks' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Tasks
+                <span className="px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded font-mono text-[10px] text-slate-400">
+                  {tasks?.length || 0}
+                </span>
+                {activeTab === 'tasks' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+                )}
+              </button>
             )}
-          </button>
+
+            {/* Members Tab */}
+            {enabledTabs.includes('members') && (
+              <button
+                onClick={() => setActiveTab('members')}
+                className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
+                  activeTab === 'members' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Members
+                <span className="px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded font-mono text-[10px] text-slate-400">
+                  {project.members.length}
+                </span>
+                {activeTab === 'members' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+                )}
+              </button>
+            )}
+
+            {/* Milestones Tab */}
+            {enabledTabs.includes('milestones') && (
+              <button
+                onClick={() => setActiveTab('milestones')}
+                className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
+                  activeTab === 'milestones' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Milestones
+                <span className="px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded font-mono text-[10px] text-slate-400">
+                  {milestones?.length || 0}
+                </span>
+                {activeTab === 'milestones' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+                )}
+              </button>
+            )}
+
+            {/* Issues Tab */}
+            {enabledTabs.includes('issues') && project.settings?.allowIssueTracking !== false && (
+              <button
+                onClick={() => setActiveTab('issues')}
+                className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
+                  activeTab === 'issues' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Issues
+                {activeTab === 'issues' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+                )}
+              </button>
+            )}
+
+            {/* Time Logs Tab */}
+            {enabledTabs.includes('timeLogs') && project.settings?.allowTimeTracking && (
+              <button
+                onClick={() => setActiveTab('timeLogs')}
+                className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
+                  activeTab === 'timeLogs' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Time Logs
+                {activeTab === 'timeLogs' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+                )}
+              </button>
+            )}
+
+            {/* Reports Tab */}
+            {enabledTabs.includes('reports') && (
+              <button
+                onClick={() => setActiveTab('reports')}
+                className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
+                  activeTab === 'reports' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Reports
+                {activeTab === 'reports' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+                )}
+              </button>
+            )}
+
+            {/* Documents Tab */}
+            {enabledTabs.includes('documents') && (
+              <button
+                onClick={() => setActiveTab('documents')}
+                className={`pb-3.5 text-xs font-bold uppercase tracking-wider transition-all relative flex items-center gap-2 ${
+                  activeTab === 'documents' ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Documents
+                {activeTab === 'documents' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* Customize Tabs Trigger Button */}
+          <div className="shrink-0 pb-3 pl-4">
+            <button
+              type="button"
+              onClick={() => setIsConfigureTabsModalOpen(true)}
+              title="Customize Project Tabs"
+              className="px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900/80 hover:bg-slate-800 hover:border-slate-700 text-slate-400 hover:text-indigo-400 text-xs font-medium flex items-center gap-1.5 transition-all shadow-xs cursor-pointer group"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400 group-hover:rotate-90 transition-transform duration-200" />
+              <span className="hidden sm:inline">Customize Tabs</span>
+            </button>
+          </div>
         </div>
 
         {/* Tab contents */}
@@ -746,309 +953,151 @@ export default function ProjectDetailsPage() {
             <div className="lg:col-span-2 space-y-8">
               {/* Project Details Card */}
               <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 md:p-8 space-y-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-[30%] h-[30%] rounded-full bg-indigo-500/[0.02] blur-[40px]" />
+                <div className="absolute top-0 right-0 w-[30%] h-[30%] rounded-full bg-indigo-500/[0.02] blur-[40px] pointer-events-none" />
                 
-                <div className="flex justify-between items-center border-b border-slate-900 pb-4">
+                <div className="flex justify-between items-center border-b border-slate-900 pb-4 relative z-10">
                   <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
                     <FolderKanban className="w-4 h-4 text-indigo-400" />
                     Project Information
                   </h3>
-                  {canEdit && !isEditingInfo && (
+                  {canEdit && (
                     <button
-                      onClick={() => setIsEditingInfo(true)}
-                      className="text-xs font-semibold text-indigo-400 hover:text-indigo-300"
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsEditProjectModalOpen(true);
+                      }}
+                      className="text-xs font-semibold text-rose-400 hover:text-rose-300 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all cursor-pointer z-20"
                     >
+                      <Pencil className="w-3.5 h-3.5" />
                       Edit Details
                     </button>
                   )}
                 </div>
 
-                {infoError && (
-                  <div className="bg-rose-950/50 border border-rose-800 text-rose-200 text-xs p-4 rounded-xl flex items-center gap-2.5">
-                    <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                    <span>{infoError}</span>
-                  </div>
-                )}
-
-                {isEditingInfo ? (
-                  <form onSubmit={handleSaveInfo} className="space-y-4">
+                <div className="space-y-6 relative z-10">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Project Name</label>
-                      <input
-                        type="text"
-                        required
-                        value={infoName}
-                        onChange={(e) => setInfoName(e.target.value)}
-                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                      />
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Project Name</span>
+                      <p className="text-sm font-bold text-slate-100">{project.name}</p>
                     </div>
 
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Description</label>
-                      <textarea
-                        value={infoDescription}
-                        onChange={(e) => setInfoDescription(e.target.value)}
-                        rows={3}
-                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 resize-none"
-                      />
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Project Code</span>
+                      <p className="text-sm font-mono font-semibold text-indigo-400">{project.projectCode}</p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Start Date</label>
-                        <input
-                          type="date"
-                          value={infoStartDate}
-                          onChange={(e) => setInfoStartDate(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">End Date</label>
-                        <input
-                          type="date"
-                          value={infoEndDate}
-                          onChange={(e) => setInfoEndDate(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
-                        />
-                      </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Project Owner</span>
+                      <p className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-indigo-400" />
+                        {project.owner?.firstName
+                          ? `${project.owner.firstName} ${project.owner.lastName || ''}`
+                          : (project.owner?.email || 'Unassigned')}
+                      </p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Visibility Setting</label>
-                        <select
-                          value={infoVisibility}
-                          onChange={(e) => setInfoVisibility(e.target.value as any)}
-                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                        >
-                          <option value="PRIVATE">Private</option>
-                          <option value="ORGANIZATION">Organization</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</label>
-                        <select
-                          value={infoStatus}
-                          onChange={(e) => setInfoStatus(e.target.value as any)}
-                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                        >
-                          <option value="PLANNING">Planning</option>
-                          <option value="ACTIVE">Active</option>
-                          <option value="COMPLETED">Completed</option>
-                        </select>
-                      </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Created By</span>
+                      <p className="text-sm font-semibold text-slate-300">
+                        {project.creator?.firstName
+                          ? `${project.creator.firstName} ${project.creator.lastName || ''}`
+                          : (project.owner?.firstName ? `${project.owner.firstName} ${project.owner.lastName || ''}` : 'Admin User')}
+                      </p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Currency</label>
-                        <select
-                          value={infoCurrency}
-                          onChange={(e) => setInfoCurrency(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                        >
-                          <option value="USD">USD ($)</option>
-                          <option value="EUR">EUR (€)</option>
-                          <option value="GBP">GBP (£)</option>
-                          <option value="INR">INR (₹)</option>
-                          <option value="CAD">CAD (CA$)</option>
-                          <option value="AUD">AUD (A$)</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Task Layout</label>
-                        <select
-                          value={infoTaskLayout}
-                          onChange={(e) => setInfoTaskLayout(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                        >
-                          <option value="STANDARD">Standard Layout</option>
-                          <option value="KANBAN">Kanban Board Layout</option>
-                          <option value="LIST">List View Layout</option>
-                          <option value="GANTT">Gantt Timeline Layout</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Budget Type</label>
-                        <select
-                          value={infoBudgetType}
-                          onChange={(e) => setInfoBudgetType(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                        >
-                          <option value="NONE">None</option>
-                          <option value="FIXED_COST">Fixed Project Amount</option>
-                          <option value="BASED_ON_PROJECT_HOURS">Based on Project Hours</option>
-                          <option value="BASED_ON_STAFF_HOURS">Based on Staff Hours</option>
-                          <option value="BASED_ON_TASK_HOURS">Based on Task Hours</option>
-                        </select>
-                      </div>
-
-                      {infoBudgetType === 'FIXED_COST' ? (
-                        <div className="space-y-1">
-                          <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Budget Amount</label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={infoBudgetAmount}
-                            onChange={(e) => setInfoBudgetAmount(e.target.value)}
-                            placeholder="50000"
-                            className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                          />
-                        </div>
-                      ) : (infoBudgetType === 'BASED_ON_PROJECT_HOURS' || infoBudgetType === 'BASED_ON_STAFF_HOURS' || infoBudgetType === 'BASED_ON_TASK_HOURS') ? (
-                        <div className="space-y-1">
-                          <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Budget Hours</label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={infoBudgetHours}
-                            onChange={(e) => setInfoBudgetHours(e.target.value)}
-                            placeholder="120"
-                            className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                          />
-                        </div>
-                      ) : <div />}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Billing Method</label>
-                        <select
-                          value={infoBillingMethod}
-                          onChange={(e) => setInfoBillingMethod(e.target.value)}
-                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                        >
-                          <option value="NONE">None</option>
-                          <option value="FIXED_RATE">Fixed Project Rate</option>
-                          <option value="PROJECT_HOURLY_RATE">Based on Project Hourly Rate</option>
-                          <option value="STAFF_HOURLY_RATE">Based on Staff Hourly Rate</option>
-                          <option value="TASK_HOURLY_RATE">Based on Task Hourly Rate</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Billing Rate / Hour</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={infoBillingRate}
-                          onChange={(e) => setInfoBillingRate(e.target.value)}
-                          placeholder="75"
-                          className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                        />
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Project Group</span>
+                      <div>
+                        {project.group ? (
+                          <span
+                            className="px-2.5 py-1 rounded-md text-xs font-semibold inline-flex items-center gap-1.5"
+                            style={{
+                              backgroundColor: `${project.group.color || '#6366f1'}15`,
+                              color: project.group.color || '#818cf8',
+                              border: `1px solid ${project.group.color || '#6366f1'}30`,
+                            }}
+                          >
+                            <Layers className="w-3 h-3" />
+                            {project.group.name}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">None / General</span>
+                        )}
                       </div>
                     </div>
 
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Tags (comma separated)</label>
-                      <input
-                        type="text"
-                        value={infoTags}
-                        onChange={(e) => setInfoTags(e.target.value)}
-                        placeholder="Internal, High Priority, Q4"
-                        className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-2">
-                      <input
-                        type="checkbox"
-                        id="infoIsTemplate"
-                        checked={infoIsTemplate}
-                        onChange={(e) => setInfoIsTemplate(e.target.checked)}
-                        className="w-4 h-4 rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-0"
-                      />
-                      <label htmlFor="infoIsTemplate" className="text-xs text-slate-300 font-semibold cursor-pointer">
-                        Mark as Project Template (Baseline for new projects)
-                      </label>
-                    </div>
-
-                    <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-900">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsEditingInfo(false);
-                          setInfoError(null);
-                        }}
-                        className="px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-900 active:scale-98 transition-all"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={updateProjectMutation.isPending}
-                        className="px-4.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold active:scale-98 transition-all flex items-center gap-1.5"
-                      >
-                        {updateProjectMutation.isPending && <Loader2 className="w-3 animate-spin" />}
-                        Save Details
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Project Name</span>
-                        <p className="text-sm font-bold text-slate-100">{project.name}</p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Project Code</span>
-                        <p className="text-sm font-mono font-semibold text-indigo-400">{project.projectCode}</p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Created By</span>
-                        <p className="text-sm font-semibold text-slate-200">
-                          {project.owner.firstName
-                            ? `${project.owner.firstName} ${project.owner.lastName || ''}`
-                            : project.owner.email}
-                        </p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Visibility Setting</span>
-                        <p className="text-sm font-semibold text-slate-200 flex items-center gap-1.5 capitalize">
-                          {project.visibility === 'ORGANIZATION' ? <Globe className="w-4 h-4 text-emerald-400" /> : <Lock className="w-4 h-4 text-indigo-400" />}
-                          {project.visibility.toLowerCase()}
-                        </p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Start Date</span>
-                        <p className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
-                          <Calendar className="w-4 h-4 text-slate-500" />
-                          {formatDate(project.startDate)}
-                        </p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">End Date</span>
-                        <p className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
-                          <Calendar className="w-4 h-4 text-slate-500" />
-                          {formatDate(project.endDate)}
-                        </p>
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Schedule Mode</span>
+                      <div>
+                        {project.isStrict ? (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 inline-flex items-center gap-1">
+                            <ShieldAlert className="w-3 h-3" /> Strict Schedule
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                            Flexible Schedule
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <div className="space-y-1.5 pt-4 border-t border-slate-900">
-                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Description</span>
-                      <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-line">
-                        {project.description || 'No description provided for this project.'}
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Visibility Setting</span>
+                      <p className="text-sm font-semibold text-slate-200 flex items-center gap-1.5 capitalize">
+                        {project.visibility === 'ORGANIZATION' ? <Globe className="w-4 h-4 text-emerald-400" /> : <Lock className="w-4 h-4 text-indigo-400" />}
+                        {project.visibility.toLowerCase()}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Work Calendar</span>
+                      <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        {project.workingDays ? project.workingDays.split(',').length : 5} Days / Wk ({project.hoursPerDay || '8.0'} hrs/day)
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Client Portal Access</span>
+                      <div>
+                        {project.allowClientAccess ? (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            Allowed
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                            Restricted
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Start Date</span>
+                      <p className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4 text-slate-500" />
+                        {formatDate(project.startDate)}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">End Date</span>
+                      <p className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4 text-slate-500" />
+                        {formatDate(project.endDate)}
                       </p>
                     </div>
                   </div>
-                )}
+
+                  <div className="space-y-1.5 pt-4 border-t border-slate-900">
+                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Description</span>
+                    <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-line">
+                      {project.description || 'No description provided for this project.'}
+                    </p>
+                  </div>
+                </div>
               </article>
 
               {/* Project Settings/Feature Toggles Card */}
@@ -1131,6 +1180,28 @@ export default function ProjectDetailsPage() {
                         borderRadius: '9999px',
                       }}
                     />
+                  </div>
+
+                  {/* Module Navigation Tabs Config */}
+                  <div className="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-900 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg text-indigo-400">
+                        <SlidersHorizontal className="w-4.5 h-4.5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-xs text-slate-200">Custom Navigation Tabs</h4>
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          {enabledTabs.length} of 8 tabs enabled for this workspace.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsConfigureTabsModalOpen(true)}
+                      className="px-3 py-1.5 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 hover:text-indigo-300 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      Configure Tabs
+                    </button>
                   </div>
                 </div>
               </article>
@@ -1300,430 +1371,217 @@ export default function ProjectDetailsPage() {
           </div>
         )}
 
-        {/* Tasks View Tab */}
+        {/* Tasks View Tab (Zoho Projects Parity: Classic, Plain, Kanban Views) */}
         {activeTab === 'tasks' && (
+          <TasksTab
+            project={project}
+            tasks={tasks || []}
+            isLoadingTasks={isLoadingTasks}
+            milestones={milestones || []}
+            canCreateTask={canCreateTask}
+            canEditTask={canEdit}
+            onTaskClick={(taskId) => {
+              setSelectedTaskId(taskId);
+              setIsTaskDrawerOpen(true);
+            }}
+            onOpenCreateTaskModal={(defaultTaskListId, defaultMilestoneId) => {
+              handleOpenCreateTaskModal(defaultTaskListId, defaultMilestoneId);
+            }}
+            onOpenCreateMilestoneModal={() => {
+              setActiveTab('milestones');
+              setAutoOpenCreateMilestoneModal(true);
+            }}
+          />
+        )}
+
+        {/* Project Members Tab */}
+        {/* Members Tab - Zoho Projects Data Table */}
+        {activeTab === 'members' && (
           <div className="space-y-6">
-            {reorderError && (
-              <div className="bg-rose-950/40 border border-rose-900/60 text-rose-200 p-4 rounded-xl flex items-center gap-2.5">
-                <AlertTriangle className="w-5 h-5 text-rose-450 flex-shrink-0" />
-                <div className="flex-1 flex justify-between items-center">
-                  <span className="text-xs font-semibold">{reorderError}</span>
-                  <button onClick={() => setReorderError(null)} className="p-1 hover:bg-rose-900/30 rounded-lg">
-                    <X className="w-4 h-4 text-rose-400" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Filter controls header */}
-            <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-              
-              {/* Left Filters */}
-              <div className="flex flex-wrap items-center gap-3">
-                {/* View Toggle */}
-                <div className="flex bg-slate-950 border border-slate-850 p-1 rounded-xl gap-1 mr-2">
-                  <button
-                    onClick={() => setViewMode('board')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      viewMode === 'board' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Board
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      viewMode === 'list' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    List
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-1.5 text-slate-400 text-xs font-semibold mr-1">
-                  <Filter className="w-4 h-4 text-indigo-400" />
-                  <span>Filter by:</span>
-                </div>
-
-                {/* Status Filter - Only enable in List view */}
-                <select
-                  value={filterStatus}
-                  disabled={viewMode === 'board'}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className={`px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-350 focus:outline-none focus:border-indigo-500 font-semibold ${
-                    viewMode === 'board' ? 'opacity-40 cursor-not-allowed' : ''
-                  }`}
-                >
-                  <option value="ALL">All Statuses</option>
-                  <option value="TODO">To Do</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="REVIEW">In Review</option>
-                  <option value="DONE">Done</option>
-                  <option value="BLOCKED">Blocked</option>
-                </select>
-
-                {/* Priority Filter */}
-                <select
-                  value={filterPriority}
-                  onChange={(e) => setFilterPriority(e.target.value)}
-                  className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-350 focus:outline-none focus:border-indigo-500 font-semibold"
-                >
-                  <option value="ALL">All Priorities</option>
-                  <option value="LOW">Low</option>
-                  <option value="MEDIUM">Medium</option>
-                  <option value="HIGH">High</option>
-                  <option value="CRITICAL">Critical</option>
-                </select>
-
-                {/* Type Filter */}
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-350 focus:outline-none focus:border-indigo-500 font-semibold"
-                >
-                  <option value="ALL">All Types</option>
-                  <option value="TASK">Task</option>
-                  <option value="BUG">Bug</option>
-                  <option value="STORY">Story</option>
-                  <option value="IMPROVEMENT">Improvement</option>
-                </select>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/30 border border-slate-900 p-5 rounded-2xl">
+              <div>
+                <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
+                  <Users className="w-5 h-5 text-indigo-400" />
+                  Project Members ({project.members.length})
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Manage user roles, access privileges, and staff hourly billing rates
+                </p>
               </div>
 
-              {/* Right: Create Button */}
-              {canCreateTask && (
+              {canEdit && (
                 <button
-                  onClick={() => setIsCreateTaskModalOpen(true)}
-                  className="w-full md:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/10"
+                  type="button"
+                  onClick={() => setIsAddUserModalOpen(true)}
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-2 self-start sm:self-auto cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  Add Task
+                  Add Users to Project
                 </button>
               )}
             </div>
 
-            {/* Check if project has no tasks at all vs filter results */}
-            {(!tasks || tasks.length === 0) && !isLoadingTasks ? (
-              <div className="bg-slate-900/30 border border-slate-900 rounded-3xl p-10 md:p-14 text-center space-y-6 max-w-2xl mx-auto my-6 relative overflow-hidden">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-                
-                {/* Visual Icon Illustration */}
-                <div className="w-20 h-20 mx-auto bg-gradient-to-tr from-indigo-600/20 to-blue-500/20 border border-indigo-500/30 rounded-3xl flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-500/10">
-                  <ListTodo className="w-10 h-10 text-indigo-400" />
-                </div>
-
-                <div className="space-y-2 max-w-md mx-auto">
-                  <h3 className="text-xl font-extrabold text-slate-100">No tasks created yet</h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Tasks are the building blocks of a project and can be grouped into task lists. Once you've been assigned tasks or created your own, you'll be able to view and manage them here.
-                  </p>
-                </div>
-
-                {/* Action Buttons: Add Milestone, Add Task, Add Issue */}
-                <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-                  {hasPermission('CREATE_MILESTONE') && (
-                    <button
-                      onClick={() => {
-                        setActiveTab('milestones');
-                        setAutoOpenCreateMilestoneModal(true);
-                      }}
-                      className="px-5 py-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-200 rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-2 cursor-pointer shadow-lg"
-                    >
-                      <Flag className="w-4 h-4 text-amber-400" />
-                      <span>Add Milestone</span>
-                    </button>
-                  )}
-
-                  {canCreateTask && (
-                    <button
-                      onClick={() => setIsCreateTaskModalOpen(true)}
-                      className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/20"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Add Task</span>
-                    </button>
-                  )}
-
-                  {project.settings?.allowIssueTracking !== false && (
-                    <button
-                      onClick={() => setActiveTab('issues')}
-                      className="px-5 py-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-200 rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-2 cursor-pointer shadow-lg"
-                    >
-                      <Bug className="w-4 h-4 text-rose-400" />
-                      <span>Add Issue</span>
-                    </button>
-                  )}
-                </div>
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-950/40 border border-slate-900 p-4 rounded-xl">
+              {/* Role Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+                {['ALL', 'OWNER', 'MANAGER', 'MEMBER', 'CLIENT'].map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setMemberRoleFilter(r)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+                      memberRoleFilter === r
+                        ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
+                        : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    }`}
+                  >
+                    {r === 'ALL' ? 'All Members' : r.charAt(0) + r.slice(1).toLowerCase()}
+                  </button>
+                ))}
               </div>
-            ) : (
-              /* Conditionally Render Board vs List */
-              viewMode === 'board' ? (
-                isLoadingBoard ? (
-                  <div className="py-12 flex justify-center">
-                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-                  </div>
-                ) : (
-                  <KanbanBoard
-                    projectId={projectId}
-                    projectCode={project.projectCode}
-                    boardData={{
-                      todo: boardData?.todo?.filter((t: any) => {
-                        const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
-                        const matchType = filterType === 'ALL' || t.type === filterType;
-                        return matchPriority && matchType;
-                      }) || [],
-                      inProgress: boardData?.inProgress?.filter((t: any) => {
-                        const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
-                        const matchType = filterType === 'ALL' || t.type === filterType;
-                        return matchPriority && matchType;
-                      }) || [],
-                      review: boardData?.review?.filter((t: any) => {
-                        const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
-                        const matchType = filterType === 'ALL' || t.type === filterType;
-                        return matchPriority && matchType;
-                      }) || [],
-                      done: boardData?.done?.filter((t: any) => {
-                        const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
-                        const matchType = filterType === 'ALL' || t.type === filterType;
-                        return matchPriority && matchType;
-                      }) || [],
-                      blocked: boardData?.blocked?.filter((t: any) => {
-                        const matchPriority = filterPriority === 'ALL' || t.priority === filterPriority;
-                        const matchType = filterType === 'ALL' || t.type === filterType;
-                        return matchPriority && matchType;
-                      }) || [],
-                    }}
-                    isReadOnly={isArchived || !hasPermission('EDIT_TASK')}
-                    onCardClick={(taskId) => {
-                      setSelectedTaskId(taskId);
-                      setIsTaskDrawerOpen(true);
-                    }}
-                    onReorder={async (taskId, targetStatus, targetPosition) => {
-                      try {
-                        await reorderTaskMutation.mutateAsync({ taskId, status: targetStatus, position: targetPosition });
-                      } catch (e) {
-                        // Already handled in onError
-                      }
-                    }}
-                  />
-                )
-              ) : (
-                /* Tasks list grid */
-                isLoadingTasks ? (
-                  <div className="py-12 flex justify-center">
-                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-                  </div>
-                ) : filteredTasks.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredTasks.map((t: any) => (
-                      <div
-                        key={t.id}
-                        onClick={() => {
-                          setSelectedTaskId(t.id);
-                          setIsTaskDrawerOpen(true);
-                        }}
-                        className="bg-slate-900/30 border border-slate-900 hover:border-slate-800 hover:bg-slate-900/50 rounded-2xl p-5 transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4 group relative overflow-hidden"
-                      >
-                        <div className="absolute top-0 right-0 w-[20%] h-[20%] rounded-full bg-indigo-500/[0.01] group-hover:bg-indigo-500/[0.03] blur-[25px] transition-all" />
 
-                        {/* Top Row: Code, Type Icon, Priority */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-950 border border-slate-800/80 rounded text-slate-400 font-semibold group-hover:text-indigo-400 transition-colors">
-                              {project.projectCode}-{t.taskNumber}
-                            </span>
-                            <div className="p-1 bg-slate-950/40 border border-slate-800/50 rounded" title={t.type}>
-                              {getTypeIcon(t.type)}
-                            </div>
-                          </div>
-
-                          <span className={`px-2 py-0.5 rounded text-[8px] font-bold border uppercase ${getPriorityColor(t.priority)}`}>
-                            {t.priority}
-                          </span>
-                        </div>
-
-                        {/* Middle Row: Title */}
-                        <div className="space-y-1">
-                          <h4 className="font-extrabold text-xs text-slate-100 leading-snug group-hover:text-indigo-300 transition-colors line-clamp-2">
-                            {t.title}
-                          </h4>
-                          {t.description && (
-                            <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">
-                              {t.description}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Bottom Row: Status badge, Assignee initials/name */}
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-900/80 text-[10px]">
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase tracking-wider ${getStatusColor(t.status)}`}>
-                            {t.status.replace('_', ' ')}
-                          </span>
-
-                          <div className="flex items-center gap-2 min-w-0">
-                            {t.estimatedHours !== null && (
-                              <div className="flex items-center gap-1 text-[10px] text-slate-500 mr-1.5" title="Estimation">
-                                <Clock className="w-3.5 h-3.5 text-slate-650" />
-                                <span>{t.estimatedHours}h</span>
-                              </div>
-                            )}
-                            
-                            {t.assignee ? (
-                              <div className="flex items-center gap-1.5 min-w-0" title={`Assignee: ${t.assignee.firstName || t.assignee.email}`}>
-                                <div className="w-5.5 h-5.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 font-bold flex items-center justify-center shrink-0 text-[8px] uppercase">
-                                  {t.assignee.firstName ? t.assignee.firstName[0] : t.assignee.email[0]}
-                                </div>
-                                <span className="text-slate-400 font-semibold truncate max-w-[80px]">
-                                  {t.assignee.firstName || t.assignee.email.split('@')[0]}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 text-slate-600 italic">
-                                <User className="w-3.5 h-3.5 text-slate-700" />
-                                <span>Unassigned</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-16 bg-slate-900/10 border border-dashed border-slate-800 rounded-2xl">
-                    <ListTodo className="w-12 h-12 text-slate-500 mx-auto mb-3" />
-                    <h3 className="text-sm font-bold text-slate-200">No tasks match active filters</h3>
-                    <p className="text-xs text-slate-500 mt-1">Try resetting your status, priority, or type filters.</p>
-                  </div>
-                )
-              )
-            )}
-          </div>
-        )}
-
-        {/* Project Members Tab */}
-        {activeTab === 'members' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Member Management Widget */}
-            <div className="lg:col-span-2 space-y-6">
-              <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 space-y-6">
-                <div className="border-b border-slate-900 pb-4">
-                  <h3 className="font-bold text-slate-100 text-base flex items-center gap-2">
-                    <Users className="w-4.5 h-4.5 text-indigo-400" />
-                    Project Members ({project.members.length})
-                  </h3>
-                </div>
-
-                {memberError && (
-                  <div className="bg-rose-950/50 border border-rose-800 text-rose-200 text-[11px] p-3 rounded-xl flex items-center gap-2">
-                    <AlertCircle className="w-4.5 h-4.5 text-rose-400 flex-shrink-0" />
-                    <span>{memberError}</span>
-                  </div>
-                )}
-
-                {/* Add Member Form */}
-                {canEdit && availableUsers && availableUsers.length > 0 && (
-                  <form onSubmit={handleAddMember} className="space-y-3 p-4 bg-slate-950/40 border border-slate-900 rounded-xl">
-                    <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
-                      Add Team Member
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <select
-                        value={selectedUserId}
-                        onChange={(e) => setSelectedUserId(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                      >
-                        <option value="">Select User...</option>
-                        {availableUsers.map((m: any) => (
-                          <option key={m.user.id} value={m.user.id}>
-                            {m.user.firstName
-                              ? `${m.user.firstName} ${m.user.lastName || ''} (${m.user.email})`
-                              : m.user.email}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <select
-                        value={selectedMemberRole}
-                        onChange={(e) => setSelectedMemberRole(e.target.value as any)}
-                        className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-                      >
-                        <option value="MEMBER">Member (Standard)</option>
-                        <option value="MANAGER">Manager (Edit Privs)</option>
-                        <option value="OWNER">Owner (Full Admin)</option>
-                      </select>
-
-                      <button
-                        type="submit"
-                        disabled={addMemberMutation.isPending}
-                        className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold active:scale-95 transition-all flex items-center gap-1.5"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Add
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {/* Members List */}
-                <ul className="space-y-3">
-                  {project.members.map((m: any) => {
-                    const isOwner = m.role === 'OWNER';
-                    const isSelf = m.userId === user?.sub;
-                    return (
-                      <li
-                        key={m.id}
-                        className="flex items-center justify-between p-3.5 bg-slate-950/20 border border-slate-900 hover:border-slate-800/85 rounded-xl transition-all"
-                      >
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs text-slate-200 truncate">
-                              {m.user.firstName
-                                ? `${m.user.firstName} ${m.user.lastName || ''}`
-                                : m.user.email}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded text-[8px] font-bold border ${
-                              isOwner
-                                ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
-                                : m.role === 'MANAGER'
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : 'bg-slate-800 text-slate-400 border-slate-700/50'
-                            }`}>
-                              {m.role}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-slate-500 truncate">{m.user.email}</div>
-                          <div className="text-[9px] text-slate-650 flex items-center gap-1">
-                            <UserCheck className="w-3.5 h-3.5 text-slate-600" />
-                            Added by {getAddedByName(m.addedBy)}
-                          </div>
-                        </div>
-
-                        {canEdit && !isSelf && (
-                          <button
-                            onClick={() => {
-                              if (confirm(`Are you sure you want to remove this member from the project?`)) {
-                                removeMemberMutation.mutate(m.userId);
-                              }
-                            }}
-                            disabled={removeMemberMutation.isPending}
-                            className="p-1.5 text-slate-500 hover:text-rose-400 border border-transparent hover:border-rose-900/30 hover:bg-rose-500/5 rounded-lg active:scale-95 transition-all"
-                            title="Remove member"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </article>
+              {/* Search Box */}
+              <div className="w-full md:w-72 relative">
+                <input
+                  type="text"
+                  value={memberSearchQuery}
+                  onChange={(e) => setMemberSearchQuery(e.target.value)}
+                  placeholder="Search members by name or email..."
+                  className="w-full px-3.5 py-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 placeholder:text-slate-600"
+                />
+              </div>
             </div>
-            
-            <div className="space-y-6">
-              {/* Optional Right Column Context */}
+
+            {/* Members Data Table */}
+            <div className="bg-slate-900/30 border border-slate-900 rounded-2xl overflow-hidden shadow-xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-950/60 border-b border-slate-800/80 text-slate-400 font-semibold tracking-wider uppercase text-[10px]">
+                      <th className="py-3.5 px-4">User</th>
+                      <th className="py-3.5 px-4">Project Role</th>
+                      <th className="py-3.5 px-4">Staff Rate ($/hr)</th>
+                      <th className="py-3.5 px-4">Joined Date</th>
+                      <th className="py-3.5 px-4">Added By</th>
+                      <th className="py-3.5 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-900/80 text-slate-300">
+                    {project.members
+                      .filter((m: any) => {
+                        const matchesRole =
+                          memberRoleFilter === 'ALL' || m.role === memberRoleFilter;
+                        const name = m.user?.firstName
+                          ? `${m.user.firstName} ${m.user.lastName || ''}`.toLowerCase()
+                          : '';
+                        const email = (m.user?.email || '').toLowerCase();
+                        const query = memberSearchQuery.toLowerCase().trim();
+                        const matchesQuery = !query || name.includes(query) || email.includes(query);
+                        return matchesRole && matchesQuery;
+                      })
+                      .map((m: any) => {
+                        const isOwner = m.role === 'OWNER';
+                        const isManager = m.role === 'MANAGER';
+                        const isClient = m.role === 'CLIENT';
+                        const isSelf = m.userId === user?.sub;
+                        const memberName = m.user?.firstName
+                          ? `${m.user.firstName} ${m.user.lastName || ''}`
+                          : m.user?.email || 'User';
+
+                        return (
+                          <tr
+                            key={m.id}
+                            className="hover:bg-slate-850/40 transition-colors group"
+                          >
+                            {/* User Info */}
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-slate-200 text-xs shrink-0">
+                                  {memberName.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-bold text-slate-100 text-xs truncate">
+                                    {memberName} {isSelf && <span className="text-[10px] text-indigo-400 font-normal ml-1">(You)</span>}
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 truncate">{m.user?.email}</div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Role Badge */}
+                            <td className="py-3.5 px-4">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold border ${
+                                  isOwner
+                                    ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                                    : isManager
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                    : isClient
+                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                    : 'bg-slate-800/80 text-slate-400 border-slate-700/50'
+                                }`}
+                              >
+                                {m.role}
+                              </span>
+                            </td>
+
+                            {/* Staff Hourly Rate */}
+                            <td className="py-3.5 px-4 font-mono font-medium text-slate-300">
+                              {m.hourlyRate !== null && m.hourlyRate !== undefined ? (
+                                <span className="text-emerald-400 font-semibold">${parseFloat(m.hourlyRate).toFixed(2)}/hr</span>
+                              ) : (
+                                <span className="text-slate-600 text-[11px] font-sans">Default Rate</span>
+                              )}
+                            </td>
+
+                            {/* Joined Date */}
+                            <td className="py-3.5 px-4 text-slate-400 text-[11px]">
+                              {formatDate(m.joinedAt || m.createdAt)}
+                            </td>
+
+                            {/* Added By */}
+                            <td className="py-3.5 px-4 text-slate-400 text-[11px]">
+                              {getAddedByName(m.addedBy)}
+                            </td>
+
+                            {/* Action Buttons */}
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingMember(m)}
+                                    className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all"
+                                    title="Edit role and hourly rate"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+
+                                {canEdit && !isSelf && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (confirm(`Are you sure you want to remove ${memberName} from this project?`)) {
+                                        removeMemberMutation.mutate(m.userId);
+                                      }
+                                    }}
+                                    disabled={removeMemberMutation.isPending}
+                                    className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
+                                    title="Remove member from project"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -1731,7 +1589,7 @@ export default function ProjectDetailsPage() {
         {activeTab === 'milestones' && (
           <MilestonesTab
             projectId={projectId}
-            onOpenCreateTaskModal={handleOpenCreateTaskModalWithMilestone}
+            onOpenCreateTaskModal={(mId) => handleOpenCreateTaskModal(undefined, mId)}
             autoOpenCreateModal={autoOpenCreateMilestoneModal}
             onResetAutoOpenCreateModal={() => setAutoOpenCreateMilestoneModal(false)}
           />
@@ -1753,6 +1611,10 @@ export default function ProjectDetailsPage() {
           <ReportsTab projectId={projectId} />
         )}
 
+        {activeTab === 'documents' && (
+          <DocumentsTab projectId={projectId} />
+        )}
+
       </main>
 
       {/* Task Drawer */}
@@ -1764,34 +1626,40 @@ export default function ProjectDetailsPage() {
           setIsTaskDrawerOpen(false);
           setSelectedTaskId(null);
         }}
+        onSelectTask={(newTaskId) => {
+          setSelectedTaskId(newTaskId);
+          setIsTaskDrawerOpen(true);
+        }}
       />
 
-      {/* Create Task Modal Overlay */}
+      {/* Create Task Slide-Over Panel */}
       {isCreateTaskModalOpen && (
-        <>
+        <div className="fixed inset-0 z-50 flex justify-end overflow-hidden animate-in fade-in duration-200">
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 transition-opacity"
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs"
             onClick={() => setIsCreateTaskModalOpen(false)}
           />
 
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-slate-100">
-              
-              <header className="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
-                <h3 className="font-extrabold text-sm text-slate-100 flex items-center gap-2">
-                  <ListTodo className="w-4.5 h-4.5 text-indigo-400" />
-                  Create New Project Task
-                </h3>
-                <button
-                  onClick={() => setIsCreateTaskModalOpen(false)}
-                  className="p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-850"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </header>
+          <div className="relative bg-slate-900 border-l border-slate-800 w-full max-w-xl h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300 text-slate-100 overflow-hidden z-10">
+            
+            <header className="border-b border-slate-800 px-6 py-4 flex items-center justify-between shrink-0">
+              <h3 className="font-extrabold text-sm text-slate-100 flex items-center gap-2">
+                <ListTodo className="w-4.5 h-4.5 text-indigo-400" />
+                Create New Project Task
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsCreateTaskModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </header>
 
-              <form onSubmit={handleCreateTask} className="p-6 space-y-4">
-                
+            <form onSubmit={(e) => handleCreateTask(e, false)} className="flex flex-col flex-1 overflow-hidden">
+              
+              {/* Scrollable Form Body */}
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
                 {createTaskError && (
                   <div className="bg-rose-950/50 border border-rose-800 text-rose-200 text-xs p-3.5 rounded-xl flex items-center gap-2">
                     <AlertCircle className="w-4.5 h-4.5 text-rose-400 flex-shrink-0" />
@@ -1799,9 +1667,16 @@ export default function ProjectDetailsPage() {
                   </div>
                 )}
 
+                {createTaskSuccess && (
+                  <div className="bg-emerald-950/50 border border-emerald-800 text-emerald-200 text-xs p-3.5 rounded-xl flex items-center gap-2">
+                    <Check className="w-4.5 h-4.5 text-emerald-400 flex-shrink-0" />
+                    <span>{createTaskSuccess}</span>
+                  </div>
+                )}
+
                 <div className="space-y-1">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Task Title *
+                    Task Name / Title *
                   </label>
                   <input
                     type="text"
@@ -1820,7 +1695,7 @@ export default function ProjectDetailsPage() {
                   <textarea
                     value={createTaskDescription}
                     onChange={(e) => setCreateTaskDescription(e.target.value)}
-                    rows={3}
+                    rows={4}
                     placeholder="Provide scope guidelines, technical considerations, or links..."
                     className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 resize-none"
                   />
@@ -1834,7 +1709,7 @@ export default function ProjectDetailsPage() {
                     <select
                       value={createTaskType}
                       onChange={(e) => setCreateTaskType(e.target.value as any)}
-                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
                     >
                       <option value="TASK">Task</option>
                       <option value="BUG">Bug</option>
@@ -1850,7 +1725,7 @@ export default function ProjectDetailsPage() {
                     <select
                       value={createTaskPriority}
                       onChange={(e) => setCreateTaskPriority(e.target.value as any)}
-                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
                     >
                       <option value="LOW">Low</option>
                       <option value="MEDIUM">Medium</option>
@@ -1868,7 +1743,7 @@ export default function ProjectDetailsPage() {
                     <select
                       value={createTaskAssigneeId}
                       onChange={(e) => setCreateTaskAssigneeId(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
                     >
                       <option value="">Unassigned</option>
                       {project.members.map((m: any) => (
@@ -1881,7 +1756,7 @@ export default function ProjectDetailsPage() {
 
                   <div className="space-y-1">
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      Estimation (Hours)
+                      Work Hours (Est.)
                     </label>
                     <input
                       type="number"
@@ -1901,12 +1776,39 @@ export default function ProjectDetailsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Task List
+                    </label>
+                    <select
+                      value={createTaskTaskListId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCreateTaskTaskListId(val);
+                        if (val) {
+                          const targetList = taskLists?.find((tl: any) => tl.id === val);
+                          if (targetList?.milestoneId) {
+                            setCreateTaskMilestoneId(targetList.milestoneId);
+                          }
+                        }
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
+                    >
+                      <option value="">None (General / Unassigned)</option>
+                      {taskLists?.map((tl: any) => (
+                        <option key={tl.id} value={tl.id}>
+                          {tl.name} {tl.flag === 'INTERNAL' ? '(Internal)' : '(External)'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                       Milestone
                     </label>
                     <select
                       value={createTaskMilestoneId}
                       onChange={(e) => setCreateTaskMilestoneId(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
                     >
                       <option value="">None</option>
                       {milestones?.map((m: any) => (
@@ -1915,6 +1817,20 @@ export default function ProjectDetailsPage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={createTaskStartDate}
+                      onChange={(e) => setCreateTaskStartDate(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
+                    />
                   </div>
 
                   <div className="space-y-1">
@@ -1930,30 +1846,329 @@ export default function ProjectDetailsPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                {/* Recurrence Configuration Section */}
+                <div className="pt-2 border-t border-slate-800/80">
+                  <div className="bg-slate-950/60 border border-slate-850 rounded-xl p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Repeat className="w-4 h-4 text-violet-400" />
+                        <div>
+                          <div className="text-xs font-bold text-slate-200">
+                            Repeat this task (Recurrence)
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            Automatically create subsequent occurrences following a schedule
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCreateTaskIsRecurring(!createTaskIsRecurring)}
+                        className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                          createTaskIsRecurring ? 'bg-violet-600' : 'bg-slate-800'
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded-full bg-white transition-transform absolute top-1 left-1 ${
+                            createTaskIsRecurring ? 'translate-x-5' : ''
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {createTaskIsRecurring && (
+                      <div className="space-y-4 pt-3 border-t border-slate-850/80 animate-in fade-in duration-200">
+                        {/* Frequency & Interval */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              Frequency
+                            </label>
+                            <select
+                              value={createTaskFrequency}
+                              onChange={(e) => setCreateTaskFrequency(e.target.value as any)}
+                              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-violet-500 cursor-pointer"
+                            >
+                              <option value="DAILY">Daily</option>
+                              <option value="WEEKLY">Weekly</option>
+                              <option value="MONTHLY">Monthly</option>
+                              <option value="YEARLY">Yearly</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              Repeat Every
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="1"
+                                max="365"
+                                value={createTaskInterval}
+                                onChange={(e) => setCreateTaskInterval(Math.max(1, parseInt(e.target.value) || 1))}
+                                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-violet-500"
+                              />
+                              <span className="text-[11px] text-slate-400 font-medium">
+                                {createTaskFrequency === 'DAILY' && (createTaskInterval === 1 ? 'day' : 'days')}
+                                {createTaskFrequency === 'WEEKLY' && (createTaskInterval === 1 ? 'week' : 'weeks')}
+                                {createTaskFrequency === 'MONTHLY' && (createTaskInterval === 1 ? 'month' : 'months')}
+                                {createTaskFrequency === 'YEARLY' && (createTaskInterval === 1 ? 'year' : 'years')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Weekly Weekdays Selector */}
+                        {createTaskFrequency === 'WEEKLY' && (
+                          <div className="space-y-1.5">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              Repeat on Days
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              {[
+                                { day: 1, label: 'M', name: 'Mon' },
+                                { day: 2, label: 'T', name: 'Tue' },
+                                { day: 3, label: 'W', name: 'Wed' },
+                                { day: 4, label: 'T', name: 'Thu' },
+                                { day: 5, label: 'F', name: 'Fri' },
+                                { day: 6, label: 'S', name: 'Sat' },
+                                { day: 0, label: 'S', name: 'Sun' },
+                              ].map(({ day, label, name }) => {
+                                const isSelected = createTaskDaysOfWeek.includes(day);
+                                return (
+                                  <button
+                                    key={day}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        if (createTaskDaysOfWeek.length > 1) {
+                                          setCreateTaskDaysOfWeek(createTaskDaysOfWeek.filter((d) => d !== day));
+                                        }
+                                      } else {
+                                        setCreateTaskDaysOfWeek([...createTaskDaysOfWeek, day]);
+                                      }
+                                    }}
+                                    title={name}
+                                    className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-violet-600 text-white shadow-md shadow-violet-600/30'
+                                        : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Monthly Day of Month */}
+                        {createTaskFrequency === 'MONTHLY' && (
+                          <div className="space-y-1">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              Day of Month (1 - 31)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="31"
+                              value={createTaskDayOfMonth}
+                              onChange={(e) =>
+                                setCreateTaskDayOfMonth(
+                                  Math.min(31, Math.max(1, parseInt(e.target.value) || 1))
+                                )
+                              }
+                              className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-violet-500"
+                            />
+                          </div>
+                        )}
+
+                        {/* Non-working days handling */}
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            If Occurrence Lands on Non-Working Day
+                          </label>
+                          <select
+                            value={createTaskNonWorkingDayAction}
+                            onChange={(e) => setCreateTaskNonWorkingDayAction(e.target.value as any)}
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-200 text-xs focus:outline-none focus:border-violet-500 cursor-pointer"
+                          >
+                            <option value="NEXT_WORKING_DAY">Move to next working day</option>
+                            <option value="PREVIOUS_WORKING_DAY">Move to previous working day</option>
+                            <option value="EXACT_DATE">Keep exact calendar date</option>
+                          </select>
+                        </div>
+
+                        {/* End Condition */}
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Ends
+                          </label>
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="createTaskEndType"
+                                checked={createTaskEndType === 'NEVER'}
+                                onChange={() => setCreateTaskEndType('NEVER')}
+                                className="accent-violet-600"
+                              />
+                              <span>Never (Indefinite series)</span>
+                            </label>
+
+                            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="createTaskEndType"
+                                checked={createTaskEndType === 'ON_DATE'}
+                                onChange={() => setCreateTaskEndType('ON_DATE')}
+                                className="accent-violet-600"
+                              />
+                              <span>On date</span>
+                              {createTaskEndType === 'ON_DATE' && (
+                                <input
+                                  type="date"
+                                  value={createTaskEndDate}
+                                  onChange={(e) => setCreateTaskEndDate(e.target.value)}
+                                  className="ml-2 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200 [color-scheme:dark]"
+                                />
+                              )}
+                            </label>
+
+                            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="createTaskEndType"
+                                checked={createTaskEndType === 'AFTER_OCCURRENCES'}
+                                onChange={() => setCreateTaskEndType('AFTER_OCCURRENCES')}
+                                className="accent-violet-600"
+                              />
+                              <span>After</span>
+                              {createTaskEndType === 'AFTER_OCCURRENCES' && (
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="999"
+                                  value={createTaskMaxOccurrences}
+                                  onChange={(e) =>
+                                    setCreateTaskMaxOccurrences(Math.max(1, parseInt(e.target.value) || 1))
+                                  }
+                                  className="w-20 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200"
+                                />
+                              )}
+                              <span>occurrences</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Live Summary banner */}
+                        <div className="p-2.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-[11px] text-violet-300 flex items-start gap-2">
+                          <Repeat className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />
+                          <div>
+                            Repeats every{' '}
+                            {createTaskInterval > 1 ? `${createTaskInterval} ` : ''}
+                            {createTaskFrequency === 'DAILY' && (createTaskInterval === 1 ? 'day' : 'days')}
+                            {createTaskFrequency === 'WEEKLY' && (
+                              <>
+                                week on{' '}
+                                <span className="font-semibold">
+                                  {createTaskDaysOfWeek
+                                    .map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d])
+                                    .join(', ')}
+                                </span>
+                              </>
+                            )}
+                            {createTaskFrequency === 'MONTHLY' && `month on day ${createTaskDayOfMonth}`}
+                            {createTaskFrequency === 'YEARLY' && (createTaskInterval === 1 ? 'year' : 'years')}
+                            {createTaskEndType === 'ON_DATE' && createTaskEndDate && ` until ${createTaskEndDate}`}
+                            {createTaskEndType === 'AFTER_OCCURRENCES' && `, ending after ${createTaskMaxOccurrences} occurrences`}
+                            .{' '}
+                            {createTaskNonWorkingDayAction === 'NEXT_WORKING_DAY' &&
+                              'Non-working days move forward.'}
+                            {createTaskNonWorkingDayAction === 'PREVIOUS_WORKING_DAY' &&
+                              'Non-working days move backward.'}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Fixed Footer at bottom */}
+              <div className="flex items-center justify-between gap-3 p-6 pt-4 border-t border-slate-800 bg-slate-950/60 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTaskModalOpen(false)}
+                  className="px-4 py-2 bg-slate-950 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs font-semibold text-slate-300 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setIsCreateTaskModalOpen(false)}
-                    className="px-4 py-2.5 bg-slate-950 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs font-semibold text-slate-400"
+                    onClick={(e) => handleCreateTask(e, true)}
+                    disabled={createTaskMutation.isPending}
+                    className="px-4 py-2 bg-slate-900 border border-slate-750 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Create this task and keep the form open for another entry"
                   >
-                    Cancel
+                    {createTaskMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <Plus className="w-3.5 h-3.5" />
+                    Save & Add Another
                   </button>
+
                   <button
                     type="submit"
                     disabled={createTaskMutation.isPending}
-                    className="px-4.5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-1.5"
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-indigo-600/20 disabled:opacity-50"
                   >
                     {createTaskMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     Create Task
                   </button>
                 </div>
+              </div>
 
-              </form>
+            </form>
 
-            </div>
           </div>
-        </>
+        </div>
       )}
+
+      {/* Edit Project Slide-Over Drawer */}
+      <CreateProjectModal
+        isOpen={isEditProjectModalOpen}
+        onClose={() => setIsEditProjectModalOpen(false)}
+        project={project}
+      />
+
+      {/* Zoho-Style Add User Slide-Over Drawer */}
+      <AddUserModal
+        isOpen={isAddUserModalOpen}
+        onClose={() => setIsAddUserModalOpen(false)}
+        projectId={projectId}
+        projectName={project?.name}
+        availableUsers={availableUsers}
+      />
+
+      {/* Edit Member Role & Hourly Rate Modal */}
+      <EditMemberModal
+        isOpen={!!editingMember}
+        onClose={() => setEditingMember(null)}
+        projectId={projectId}
+        member={editingMember}
+      />
+
+      {/* Configure Project Tabs Modal */}
+      <ConfigureTabsModal
+        isOpen={isConfigureTabsModalOpen}
+        onClose={() => setIsConfigureTabsModalOpen(false)}
+        currentEnabledTabs={enabledTabs}
+        canEditProject={canEdit}
+        onSave={handleSaveTabs}
+      />
 
     </div>
   );

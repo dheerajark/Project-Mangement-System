@@ -19,6 +19,8 @@ import {
   Menu,
   X,
   CheckSquare,
+  BarChart2,
+  Layout,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -174,6 +176,18 @@ export default function Sidebar() {
                   Time Logs
                 </span>
               </Link>
+              <Link href="/reports" className={collapsedItemClass('/reports')} title="Reports">
+                <BarChart2 className="w-5 h-5" />
+                <span className="absolute left-12 bg-slate-900 border border-slate-800 text-slate-100 text-[10px] px-2.5 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-55 pointer-events-none whitespace-nowrap">
+                  Reports
+                </span>
+              </Link>
+              <Link href="/dashboards" className={collapsedItemClass('/dashboards')} title="Dashboards">
+                <Layout className="w-5 h-5" />
+                <span className="absolute left-12 bg-slate-900 border border-slate-800 text-slate-100 text-[10px] px-2.5 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-55 pointer-events-none whitespace-nowrap">
+                  Dashboards
+                </span>
+              </Link>
             </div>
           ) : (
             /* EXPANDED SIDEBAR VIEW */
@@ -183,6 +197,10 @@ export default function Sidebar() {
                 <Link href="/dashboard" className={navItemClass('/dashboard')}>
                   <Home className="w-4 h-4" />
                   <span>Home</span>
+                </Link>
+                <Link href="/dashboards" className={navItemClass('/dashboards')}>
+                  <Layout className="w-4 h-4" />
+                  <span>Dashboards</span>
                 </Link>
                 <Link href="/projects" className={navItemClass('/projects')}>
                   <FolderKanban className="w-4 h-4" />
@@ -221,6 +239,14 @@ export default function Sidebar() {
                     <Link href="/time-logs" className={overviewItemClass('/time-logs')}>
                       <Clock className="w-3.5 h-3.5" />
                       <span>Time Logs</span>
+                    </Link>
+                    <Link href="/reports" className={overviewItemClass('/reports')}>
+                      <BarChart2 className="w-3.5 h-3.5" />
+                      <span>Reports</span>
+                    </Link>
+                    <Link href="/dashboards" className={overviewItemClass('/dashboards')}>
+                      <Layout className="w-3.5 h-3.5" />
+                      <span>Dashboards</span>
                     </Link>
                   </div>
                 )}

@@ -57,8 +57,9 @@ describe('AuthService', () => {
   describe('login', () => {
     it('should throw ForbiddenException if user is not found', async () => {
       mockPrismaService.user.findFirst.mockResolvedValue(null);
-      await expect(service.login({ email: 'test@example.com', password: 'password' }))
-        .rejects.toThrow(ForbiddenException);
+      await expect(
+        service.login({ email: 'test@example.com', password: 'password' }),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should throw ForbiddenException if password does not match', async () => {
@@ -71,8 +72,9 @@ describe('AuthService', () => {
       });
       (argon2.verify as jest.Mock).mockResolvedValue(false);
 
-      await expect(service.login({ email: 'test@example.com', password: 'password' }))
-        .rejects.toThrow(ForbiddenException);
+      await expect(
+        service.login({ email: 'test@example.com', password: 'password' }),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should return tokens if login is successful', async () => {
@@ -95,7 +97,10 @@ describe('AuthService', () => {
         .mockResolvedValueOnce('refresh-token');
       mockPrismaService.user.update.mockResolvedValue(user);
 
-      const tokens = await service.login({ email: 'test@example.com', password: 'password' });
+      const tokens = await service.login({
+        email: 'test@example.com',
+        password: 'password',
+      });
 
       expect(tokens).toEqual({
         access_token: 'access-token',

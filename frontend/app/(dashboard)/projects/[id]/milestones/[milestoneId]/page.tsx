@@ -7,6 +7,9 @@ import { api } from '@/services/api';
 import { useAuth } from '@/hooks/useAuth';
 import Header from '@/components/header';
 import TaskDetailDrawer from '@/components/task-detail-drawer';
+import CreateTaskListModal from '@/components/create-task-list-modal';
+import EditTaskListModal from '@/components/edit-task-list-modal';
+import TaskListDiscussionDrawer from '@/components/task-list-discussion-drawer';
 import {
   Flag,
   Calendar,
@@ -21,6 +24,9 @@ import {
   User,
   Edit2,
   Archive,
+  FolderPlus,
+  FolderTree,
+  MessageSquare,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useFormatDate } from '@/hooks/useFormatDate';
@@ -38,6 +44,11 @@ export default function DedicatedMilestoneDetailPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
 
+  // Create Task List Modal State
+  const [isCreateTaskListModalOpen, setIsCreateTaskListModalOpen] = useState(false);
+  const [editingTaskList, setEditingTaskList] = useState<any>(null);
+  const [discussionTaskListId, setDiscussionTaskListId] = useState<string | null>(null);
+
   // Create Task Modal State
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [createTaskTitle, setCreateTaskTitle] = useState('');
@@ -54,6 +65,16 @@ export default function DedicatedMilestoneDetailPage() {
     queryKey: ['project', projectId],
     queryFn: async () => {
       const res = await api.get(`/projects/${projectId}`);
+      return res.data;
+    },
+    enabled: isAuthenticated && !!projectId,
+  });
+
+  // Fetch Project Milestones
+  const { data: milestones = [] } = useQuery({
+    queryKey: ['milestones', projectId],
+    queryFn: async () => {
+      const res = await api.get(`/projects/${projectId}/milestones`);
       return res.data;
     },
     enabled: isAuthenticated && !!projectId,
@@ -287,6 +308,85 @@ export default function DedicatedMilestoneDetailPage() {
           </div>
         </article>
 
+        {/* Associated Task Lists Section */}
+        {milestone?.taskLists && milestone.taskLists.length > 0 && (
+          <section className="bg-slate-900/20 border border-slate-900 rounded-3xl p-6 md:p-8 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-900 pb-3">
+              <h3 className="font-extrabold text-sm text-slate-100 flex items-center gap-2">
+                <FolderTree className="w-4 h-4 text-indigo-400" />
+                Associated Task Lists ({milestone.taskLists.length})
+              </h3>
+              {hasPermission('CREATE_TASK') && (
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTaskListModalOpen(true)}
+                  className="px-3 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <FolderPlus className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Add Task List</span>
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {milestone.taskLists.map((tl: any) => (
+                <div
+                  key={tl.id}
+                  onClick={() => router.push(`/projects/${projectId}?tab=tasks`)}
+                  className="bg-slate-950/60 border border-slate-900 hover:border-indigo-500/40 rounded-2xl p-4 transition-all cursor-pointer group space-y-2.5"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-slate-200 group-hover:text-indigo-300 transition-colors truncate">
+                      {tl.name}
+                    </span>
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                        tl.flag === 'INTERNAL'
+                          ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                      }`}>
+                        {tl.flag}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDiscussionTaskListId(tl.id);
+                        }}
+                        title="Open task list discussion"
+                        className="p-1 hover:bg-slate-800 text-slate-400 hover:text-indigo-300 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                      </button>
+                      {hasPermission('CREATE_TASK') && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingTaskList(tl)}
+                          title="Move or edit task list"
+                          className="p-1 hover:bg-slate-800 text-slate-400 hover:text-indigo-300 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {tl.description && (
+                    <p className="text-[11px] text-slate-400 line-clamp-1">{tl.description}</p>
+                  )}
+                  <div className="space-y-1 pt-1">
+                    <div className="flex justify-between text-[10px] text-slate-500">
+                      <span>Progress</span>
+                      <span className="font-mono text-indigo-400 font-bold">{tl.progress || 0}% ({tl.completedTasks || 0}/{tl.totalTasks || 0})</span>
+                    </div>
+                    <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${tl.progress || 0}%` }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Linked Tasks Section */}
         <section className="bg-slate-900/20 border border-slate-900 rounded-3xl p-6 md:p-8 space-y-6">
           <div className="flex items-center justify-between border-b border-slate-900 pb-4">
@@ -295,13 +395,22 @@ export default function DedicatedMilestoneDetailPage() {
               Tasks & Deliverables ({milestoneTasks.length})
             </h3>
             {hasPermission('CREATE_TASK') && (
-              <button
-                onClick={() => setIsCreateTaskModalOpen(true)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Task</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsCreateTaskListModalOpen(true)}
+                  className="px-3.5 py-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-sm"
+                >
+                  <FolderPlus className="w-4 h-4 text-indigo-400" />
+                  <span>Add Task List</span>
+                </button>
+                <button
+                  onClick={() => setIsCreateTaskModalOpen(true)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-600/20 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Task</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -322,13 +431,22 @@ export default function DedicatedMilestoneDetailPage() {
               </div>
 
               {hasPermission('CREATE_TASK') && (
-                <button
-                  onClick={() => setIsCreateTaskModalOpen(true)}
-                  className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-semibold active:scale-95 transition-all inline-flex items-center gap-2 shadow-lg shadow-indigo-600/20 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Task</span>
-                </button>
+                <div className="flex items-center justify-center gap-2.5">
+                  <button
+                    onClick={() => setIsCreateTaskListModalOpen(true)}
+                    className="px-4 py-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-200 rounded-xl text-xs font-semibold active:scale-95 transition-all inline-flex items-center gap-2 cursor-pointer"
+                  >
+                    <FolderPlus className="w-4 h-4 text-indigo-400" />
+                    <span>Add Task List</span>
+                  </button>
+                  <button
+                    onClick={() => setIsCreateTaskModalOpen(true)}
+                    className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-semibold active:scale-95 transition-all inline-flex items-center gap-2 shadow-lg shadow-indigo-600/20 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Task</span>
+                  </button>
+                </div>
               )}
             </div>
           ) : (
@@ -386,6 +504,10 @@ export default function DedicatedMilestoneDetailPage() {
         onClose={() => {
           setIsTaskDrawerOpen(false);
           setSelectedTaskId(null);
+        }}
+        onSelectTask={(newTaskId) => {
+          setSelectedTaskId(newTaskId);
+          setIsTaskDrawerOpen(true);
         }}
       />
 
@@ -516,6 +638,45 @@ export default function DedicatedMilestoneDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Create Task List Modal */}
+      <CreateTaskListModal
+        isOpen={isCreateTaskListModalOpen}
+        onClose={() => setIsCreateTaskListModalOpen(false)}
+        projectId={projectId}
+        milestones={milestones.length > 0 ? milestones : (milestone ? [milestone] : [])}
+        defaultMilestoneId={milestoneId}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['milestone', milestoneId] });
+          queryClient.invalidateQueries({ queryKey: ['milestones', projectId] });
+          queryClient.invalidateQueries({ queryKey: ['task-lists', projectId] });
+          queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+        }}
+      />
+
+      {/* Edit Task List Modal */}
+      {editingTaskList && (
+        <EditTaskListModal
+          isOpen={!!editingTaskList}
+          onClose={() => {
+            setEditingTaskList(null);
+            queryClient.invalidateQueries({ queryKey: ['milestone', milestoneId] });
+            queryClient.invalidateQueries({ queryKey: ['milestones', projectId] });
+          }}
+          taskList={editingTaskList}
+          projectId={projectId}
+          milestones={milestones.length > 0 ? milestones : (milestone ? [milestone] : [])}
+        />
+      )}
+
+      {/* Task List Discussion Drawer */}
+      <TaskListDiscussionDrawer
+        taskListId={discussionTaskListId}
+        projectId={projectId}
+        project={project}
+        onClose={() => setDiscussionTaskListId(null)}
+      />
+
     </div>
   );
 }

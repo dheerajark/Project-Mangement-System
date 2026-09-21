@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
@@ -6,6 +11,8 @@ import { UpdateMemberDto } from './dto/update-member.dto';
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { CloneProfileDto } from './dto/clone-profile.dto';
 import { AssignProfileDto } from './dto/assign-profile.dto';
+import { CreateRoleDto } from './dto/create-role.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
 
 @Injectable()
 export class OrganizationService {
@@ -24,7 +31,11 @@ export class OrganizationService {
     return settings;
   }
 
-  async updateSettings(organizationId: string, userId: string, dto: UpdateSettingsDto) {
+  async updateSettings(
+    organizationId: string,
+    userId: string,
+    dto: UpdateSettingsDto,
+  ) {
     const oldSettings = await this.getSettings(organizationId);
 
     const newSettings = await this.prisma.organizationSettings.update({
@@ -159,9 +170,15 @@ export class OrganizationService {
     return { success: true };
   }
 
-  async deleteMember(organizationId: string, currentUserId: string, targetUserId: string) {
+  async deleteMember(
+    organizationId: string,
+    currentUserId: string,
+    targetUserId: string,
+  ) {
     if (currentUserId === targetUserId) {
-      throw new ForbiddenException('You cannot delete yourself from the organization');
+      throw new ForbiddenException(
+        'You cannot delete yourself from the organization',
+      );
     }
 
     // Verify target user belongs to organization
@@ -210,8 +227,108 @@ export class OrganizationService {
     return this.auditService.getLogs(organizationId);
   }
 
-  async getRoles() {
-    return this.prisma.role.findMany();
+  async getRoles(organizationId?: string) {
+    return this.prisma.role.findMany({
+      where: {
+        OR: [
+          { organizationId: null },
+          ...(organizationId ? [{ organizationId }] : []),
+        ],
+      },
+      include: {
+        parentRole: { select: { id: true, name: true } },
+        childRoles: { select: { id: true, name: true } },
+        _count: { select: { userRoles: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createRole(organizationId: string, dto: CreateRoleDto) {
+    const existing = await this.prisma.role.findFirst({
+      where: { name: dto.name },
+    });
+    if (existing) {
+      throw new BadRequestException(
+        `Role with name "${dto.name}" already exists.`,
+      );
+    }
+
+    if (dto.parentRoleId) {
+      const parent = await this.prisma.role.findUnique({
+        where: { id: dto.parentRoleId },
+      });
+      if (!parent) throw new NotFoundException('Parent role not found.');
+    }
+
+    return this.prisma.role.create({
+      data: {
+        name: dto.name,
+        description: dto.description || null,
+        parentRoleId: dto.parentRoleId || null,
+        organizationId,
+        isSystem: false,
+      },
+      include: {
+        parentRole: { select: { id: true, name: true } },
+        childRoles: { select: { id: true, name: true } },
+        _count: { select: { userRoles: true } },
+      },
+    });
+  }
+
+  async updateRole(organizationId: string, roleId: string, dto: UpdateRoleDto) {
+    const role = await this.prisma.role.findUnique({
+      where: { id: roleId },
+    });
+    if (!role) throw new NotFoundException('Role not found.');
+
+    if (role.isSystem) {
+      throw new ForbiddenException('System default roles cannot be modified.');
+    }
+
+    return this.prisma.role.update({
+      where: { id: roleId },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.parentRoleId !== undefined && {
+          parentRoleId: dto.parentRoleId || null,
+        }),
+      },
+      include: {
+        parentRole: { select: { id: true, name: true } },
+        childRoles: { select: { id: true, name: true } },
+        _count: { select: { userRoles: true } },
+      },
+    });
+  }
+
+  async deleteRole(organizationId: string, roleId: string) {
+    const role = await this.prisma.role.findUnique({
+      where: { id: roleId },
+    });
+    if (!role) throw new NotFoundException('Role not found.');
+
+    if (role.isSystem) {
+      throw new ForbiddenException('System default roles cannot be deleted.');
+    }
+
+    // Reassign any assigned users to Employee/Member role if existing
+    const defaultRole = await this.prisma.role.findFirst({
+      where: { name: 'Member' },
+    });
+
+    if (defaultRole) {
+      await this.prisma.userRole.updateMany({
+        where: { roleId },
+        data: { roleId: defaultRole.id },
+      });
+    }
+
+    return this.prisma.role.delete({
+      where: { id: roleId },
+    });
   }
 
   // ─── Profile & Permissions Management ───────────────────────────────────────
@@ -260,7 +377,11 @@ export class OrganizationService {
     });
   }
 
-  async createCustomProfile(organizationId: string, userId: string, dto: CreateProfileDto) {
+  async createCustomProfile(
+    organizationId: string,
+    userId: string,
+    dto: CreateProfileDto,
+  ) {
     // Check if profile with name already exists for this organization
     const existing = await this.prisma.profile.findFirst({
       where: {
@@ -270,7 +391,9 @@ export class OrganizationService {
       },
     });
     if (existing) {
-      throw new BadRequestException('Profile with this name already exists in your organization');
+      throw new BadRequestException(
+        'Profile with this name already exists in your organization',
+      );
     }
 
     const profile = await this.prisma.profile.create({
@@ -295,14 +418,16 @@ export class OrganizationService {
     return profile;
   }
 
-  async cloneProfile(organizationId: string, userId: string, sourceProfileId: string, dto: CloneProfileDto) {
+  async cloneProfile(
+    organizationId: string,
+    userId: string,
+    sourceProfileId: string,
+    dto: CloneProfileDto,
+  ) {
     const sourceProfile = await this.prisma.profile.findFirst({
       where: {
         id: sourceProfileId,
-        OR: [
-          { organizationId: null },
-          { organizationId },
-        ],
+        OR: [{ organizationId: null }, { organizationId }],
         deletedAt: null,
       },
       include: {
@@ -323,7 +448,9 @@ export class OrganizationService {
       },
     });
     if (existing) {
-      throw new BadRequestException('Profile with this name already exists in your organization');
+      throw new BadRequestException(
+        'Profile with this name already exists in your organization',
+      );
     }
 
     // Create cloned profile inside a transaction
@@ -363,7 +490,11 @@ export class OrganizationService {
     return newProfile;
   }
 
-  async archiveProfile(organizationId: string, userId: string, profileId: string) {
+  async archiveProfile(
+    organizationId: string,
+    userId: string,
+    profileId: string,
+  ) {
     const profile = await this.prisma.profile.findFirst({
       where: {
         id: profileId,
@@ -377,7 +508,9 @@ export class OrganizationService {
     }
 
     if (profile.isSystem) {
-      throw new ForbiddenException('System default profiles cannot be archived');
+      throw new ForbiddenException(
+        'System default profiles cannot be archived',
+      );
     }
 
     // 1. Reassign users assigned to this profile to default Member Profile
@@ -389,7 +522,9 @@ export class OrganizationService {
       },
     });
     if (!defaultMemberProfile) {
-      throw new NotFoundException('Default Member Profile not found. Cannot reassign orphaned users.');
+      throw new NotFoundException(
+        'Default Member Profile not found. Cannot reassign orphaned users.',
+      );
     }
 
     const reassignedUserIds = await this.prisma.$transaction(async (tx) => {
@@ -446,7 +581,12 @@ export class OrganizationService {
     return { success: true, reassignedUserCount: reassignedUserIds.length };
   }
 
-  async addPermissionToProfile(organizationId: string, userId: string, profileId: string, permissionId: string) {
+  async addPermissionToProfile(
+    organizationId: string,
+    userId: string,
+    profileId: string,
+    permissionId: string,
+  ) {
     const profile = await this.prisma.profile.findFirst({
       where: {
         id: profileId,
@@ -465,7 +605,9 @@ export class OrganizationService {
     }
 
     if (profile.isSystem && profile.name === 'Admin Profile') {
-      throw new ForbiddenException('Permissions for the Admin Profile cannot be modified');
+      throw new ForbiddenException(
+        'Permissions for the Admin Profile cannot be modified',
+      );
     }
 
     const targetPermission = await this.prisma.permission.findUnique({
@@ -476,7 +618,9 @@ export class OrganizationService {
     }
 
     // Check if already assigned
-    const alreadyAssigned = profile.profilePermissions.some((pp) => pp.permissionId === permissionId);
+    const alreadyAssigned = profile.profilePermissions.some(
+      (pp) => pp.permissionId === permissionId,
+    );
     if (alreadyAssigned) {
       return { success: true };
     }
@@ -484,8 +628,11 @@ export class OrganizationService {
     // 1. Dependency check for adding:
     // If the target permission has dependencies (e.g. EDIT_TASK -> VIEW_TASK),
     // and the dependency is NOT currently assigned to the profile, throw an exception!
-    const dependencies = this.PERMISSION_DEPENDENCIES[targetPermission.name] || [];
-    const activeNames = profile.profilePermissions.map((pp) => pp.permission.name);
+    const dependencies =
+      this.PERMISSION_DEPENDENCIES[targetPermission.name] || [];
+    const activeNames = profile.profilePermissions.map(
+      (pp) => pp.permission.name,
+    );
 
     for (const depName of dependencies) {
       if (!activeNames.includes(depName)) {
@@ -523,7 +670,12 @@ export class OrganizationService {
     return { success: true };
   }
 
-  async removePermissionFromProfile(organizationId: string, userId: string, profileId: string, permissionId: string) {
+  async removePermissionFromProfile(
+    organizationId: string,
+    userId: string,
+    profileId: string,
+    permissionId: string,
+  ) {
     const profile = await this.prisma.profile.findFirst({
       where: {
         id: profileId,
@@ -542,7 +694,9 @@ export class OrganizationService {
     }
 
     if (profile.isSystem && profile.name === 'Admin Profile') {
-      throw new ForbiddenException('Permissions for the Admin Profile cannot be modified');
+      throw new ForbiddenException(
+        'Permissions for the Admin Profile cannot be modified',
+      );
     }
 
     const targetPermission = await this.prisma.permission.findUnique({
@@ -553,7 +707,9 @@ export class OrganizationService {
     }
 
     // Check if not assigned
-    const assignedPp = profile.profilePermissions.find((pp) => pp.permissionId === permissionId);
+    const assignedPp = profile.profilePermissions.find(
+      (pp) => pp.permissionId === permissionId,
+    );
     if (!assignedPp) {
       return { success: true };
     }
@@ -561,7 +717,9 @@ export class OrganizationService {
     // 2. Dependency check for removing:
     // If we remove this permission (e.g. VIEW_TASK), and there are active permissions
     // in this profile that REQUIRE it (e.g. EDIT_TASK, CREATE_TASK), throw an exception!
-    const activeNames = profile.profilePermissions.map((pp) => pp.permission.name);
+    const activeNames = profile.profilePermissions.map(
+      (pp) => pp.permission.name,
+    );
     const dependentPermissions = Object.entries(this.PERMISSION_DEPENDENCIES)
       .filter(([_, deps]) => deps.includes(targetPermission.name))
       .map(([name]) => name);
@@ -626,10 +784,7 @@ export class OrganizationService {
     const profile = await this.prisma.profile.findFirst({
       where: {
         id: dto.profileId,
-        OR: [
-          { organizationId: null },
-          { organizationId },
-        ],
+        OR: [{ organizationId: null }, { organizationId }],
         deletedAt: null,
       },
     });

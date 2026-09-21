@@ -1,11 +1,24 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { InvitationService } from './invitation.service';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { TenantId } from '../auth/decorators/tenant-id.decorator';
 import { GetCurrentUserId } from '../auth/decorators/get-current-user-id.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 
 @ApiTags('Invitations')
 @ApiBearerAuth()
@@ -23,13 +36,20 @@ export class InvitationController {
     @GetCurrentUserId() currentUserId: string,
     @Body() dto: CreateInvitationDto,
   ) {
-    return this.invitationService.createInvitation(organizationId, currentUserId, dto);
+    return this.invitationService.createInvitation(
+      organizationId,
+      currentUserId,
+      dto,
+    );
   }
 
   @Get()
   @Permissions('INVITE_MEMBERS')
   @ApiOperation({ summary: 'Get list of pending invitations' })
-  @ApiResponse({ status: 200, description: 'Invitations list retrieved successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitations list retrieved successfully.',
+  })
   getInvitations(@TenantId() organizationId: string) {
     return this.invitationService.getInvitations(organizationId);
   }
@@ -43,6 +63,10 @@ export class InvitationController {
     @GetCurrentUserId() currentUserId: string,
     @Param('id') invitationId: string,
   ) {
-    return this.invitationService.revokeInvitation(organizationId, currentUserId, invitationId);
+    return this.invitationService.revokeInvitation(
+      organizationId,
+      currentUserId,
+      invitationId,
+    );
   }
 }

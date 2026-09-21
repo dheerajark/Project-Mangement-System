@@ -1,4 +1,12 @@
-import { IsBoolean, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class LogManualTimeDto {
@@ -7,16 +15,25 @@ export class LogManualTimeDto {
   @Min(0.01)
   hours: number;
 
-  @ApiProperty({ example: '2026-06-04T00:00:00.000Z', description: 'The date work was performed' })
+  @ApiProperty({
+    example: '2026-06-04T00:00:00.000Z',
+    description: 'The date work was performed',
+  })
   @IsDateString()
   loggedAt: string;
 
-  @ApiPropertyOptional({ example: 'Implemented secure auth logs', description: 'Notes on the work performed' })
+  @ApiPropertyOptional({
+    example: 'Implemented secure auth logs',
+    description: 'Notes on the work performed',
+  })
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional({ example: true, description: 'Whether the hours are billable' })
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Whether the hours are billable',
+  })
   @IsOptional()
   @IsBoolean()
   billable?: boolean;
@@ -26,7 +43,10 @@ export class LogManualTimeDto {
   @IsNotEmpty()
   projectId: string;
 
-  @ApiPropertyOptional({ example: 'task-uuid-here', description: 'The task ID logged against' })
+  @ApiPropertyOptional({
+    example: 'task-uuid-here',
+    description: 'The task ID logged against',
+  })
   @IsOptional()
   @IsString()
   taskId?: string;

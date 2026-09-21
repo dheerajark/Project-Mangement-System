@@ -1,34 +1,84 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsNumber, IsDateString } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsNumber,
+  IsDateString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { MilestoneStatus } from '@prisma/client';
+import { MilestoneStatus, MilestoneFlag } from '@prisma/client';
 
 export class CreateMilestoneDto {
-  @ApiProperty({ example: 'Beta Release', description: 'The title of the milestone' })
+  @ApiProperty({
+    example: 'Beta Release',
+    description: 'The title of the milestone',
+  })
   @IsString()
   @IsNotEmpty({ message: 'Milestone title is required' })
   title: string;
 
-  @ApiProperty({ example: 'Release version 1.0.0-beta with core features', description: 'The description of the milestone', required: false })
+  @ApiProperty({
+    example: 'Release version 1.0.0-beta with core features',
+    description: 'The description of the milestone',
+    required: false,
+  })
   @IsString()
   @IsOptional()
   description?: string;
 
-  @ApiProperty({ example: '2026-06-01T00:00:00.000Z', description: 'Start date of the milestone', required: false })
+  @ApiProperty({
+    example: '2026-06-01T00:00:00.000Z',
+    description: 'Start date of the milestone',
+    required: false,
+  })
   @IsDateString()
   @IsOptional()
   startDate?: string;
 
-  @ApiProperty({ example: '2026-06-15T00:00:00.000Z', description: 'Due date of the milestone', required: false })
+  @ApiProperty({
+    example: '2026-06-15T00:00:00.000Z',
+    description: 'Due date of the milestone',
+    required: false,
+  })
   @IsDateString()
   @IsOptional()
   dueDate?: string;
 
-  @ApiProperty({ example: 'PLANNED', enum: MilestoneStatus, description: 'The status of the milestone', required: false })
+  @ApiProperty({
+    example: 'PLANNED',
+    enum: MilestoneStatus,
+    description: 'The status of the milestone',
+    required: false,
+  })
   @IsEnum(MilestoneStatus)
   @IsOptional()
   status?: MilestoneStatus;
 
-  @ApiProperty({ example: 0, description: 'Sorting position of the milestone', required: false })
+  @ApiProperty({
+    example: 'INTERNAL',
+    enum: MilestoneFlag,
+    description: 'Visibility flag (INTERNAL vs EXTERNAL)',
+    required: false,
+  })
+  @IsEnum(MilestoneFlag)
+  @IsOptional()
+  flag?: MilestoneFlag;
+
+  @ApiProperty({
+    example: 'user-uuid-here',
+    description: 'User ID of the milestone owner',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  ownerId?: string;
+
+  @ApiProperty({
+    example: 0,
+    description: 'Sorting position of the milestone',
+    required: false,
+  })
   @IsNumber()
   @IsOptional()
   position?: number;

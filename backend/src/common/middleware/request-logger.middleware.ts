@@ -27,7 +27,9 @@ export class RequestLoggerMiddleware implements NestMiddleware {
         try {
           const parts = token.split('.');
           if (parts.length === 3) {
-            const payloadJson = Buffer.from(parts[1], 'base64').toString('utf8');
+            const payloadJson = Buffer.from(parts[1], 'base64').toString(
+              'utf8',
+            );
             const payload = JSON.parse(payloadJson);
             if (payload && payload.sub) {
               userId = payload.sub;

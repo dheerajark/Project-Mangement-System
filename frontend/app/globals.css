@@ -2,16 +2,16 @@
 
 :root {
   /* Ergonomic Modern Light Palette (Default - Zoho & Linear Inspired) */
-  --background: #f8fafc;
+  --background: #f1f5f9;
   --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
   --primary: #2563eb;
   --primary-foreground: #ffffff;
   --secondary: #3b82f6;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --border: #e2e8f0;
+  --muted: #f8fafc;
+  --muted-foreground: #475569;
+  --border: #cbd5e1;
 
   --slate-150: #0f172a;
   --slate-155: #1e293b;
@@ -19,8 +19,8 @@
   --slate-350: #475569;
   --slate-450: #64748b;
   --slate-505: #94a3b8;
-  --slate-650: #cbd5e1;
-  --slate-655: #e2e8f0;
+  --slate-650: #e2e8f0;
+  --slate-655: #f1f5f9;
 }
 
 .dark, :root.dark {
@@ -69,17 +69,17 @@
   --slate-655: #1e293b;
 }
 
-.light {
-  --background: #f8fafc;
+.light, :root.light {
+  --background: #f1f5f9;
   --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
   --primary: #2563eb;
   --primary-foreground: #ffffff;
   --secondary: #3b82f6;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --border: #e2e8f0;
+  --muted: #f8fafc;
+  --muted-foreground: #475569;
+  --border: #cbd5e1;
 
   --slate-150: #0f172a;
   --slate-155: #1e293b;
@@ -87,8 +87,8 @@
   --slate-350: #475569;
   --slate-450: #64748b;
   --slate-505: #94a3b8;
-  --slate-650: #cbd5e1;
-  --slate-655: #e2e8f0;
+  --slate-650: #e2e8f0;
+  --slate-655: #f1f5f9;
 }
 
 /* 6 Zoho Color Swatch Accent Themes */
@@ -112,6 +112,11 @@
   --color-indigo-950: #431407;
 }
 
+.light.theme-orange, .light.theme-amber {
+  --color-indigo-400: #ea580c;
+  --color-indigo-300: #c2410c;
+}
+
 /* 2. Cyan Theme (#0ea5e9) */
 :root.theme-cyan, .theme-cyan {
   --color-indigo-50: #f0f9ff;
@@ -129,6 +134,11 @@
   --color-indigo-800: #075985;
   --color-indigo-900: #0c4a6e;
   --color-indigo-950: #082f49;
+}
+
+.light.theme-cyan {
+  --color-indigo-400: #0284c7;
+  --color-indigo-300: #0369a1;
 }
 
 /* 3. Teal Theme (#14b8a6) */
@@ -150,6 +160,11 @@
   --color-indigo-950: #042f2e;
 }
 
+.light.theme-teal {
+  --color-indigo-400: #0d9488;
+  --color-indigo-300: #0f766e;
+}
+
 /* 4. Crimson Red Theme (#ef4444) */
 :root.theme-red, .theme-red, :root.theme-rose, .theme-rose {
   --color-indigo-50: #fef2f2;
@@ -167,6 +182,11 @@
   --color-indigo-800: #991b1b;
   --color-indigo-900: #7f1d1d;
   --color-indigo-950: #450a0a;
+}
+
+.light.theme-red, .light.theme-rose {
+  --color-indigo-400: #dc2626;
+  --color-indigo-300: #b91c1c;
 }
 
 /* 5. Emerald Green Theme (#10b981) */
@@ -188,6 +208,11 @@
   --color-indigo-950: #022c22;
 }
 
+.light.theme-green, .light.theme-emerald {
+  --color-indigo-400: #059669;
+  --color-indigo-300: #047857;
+}
+
 /* 6. Royal Blue / Indigo Theme (#3b82f6) */
 :root.theme-blue, .theme-blue, :root.theme-indigo, .theme-indigo {
   --color-indigo-50: #eff6ff;
@@ -205,6 +230,11 @@
   --color-indigo-800: #1e40af;
   --color-indigo-900: #1e3a8a;
   --color-indigo-950: #172554;
+}
+
+.light.theme-blue, .light.theme-indigo {
+  --color-indigo-400: #2563eb;
+  --color-indigo-300: #1d4ed8;
 }
 
 @theme inline {
@@ -252,6 +282,233 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
   overflow-x: hidden;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ==========================================================================
+   LIGHT MODE ERGONOMIC CONTRAST & VISIBILITY OVERRIDES
+   ========================================================================== */
+
+/* Card & Container Backgrounds & Elevation in Light Mode */
+.light .bg-card,
+.light .bg-slate-900,
+.light .bg-slate-900\/10,
+.light .bg-slate-900\/20,
+.light .bg-slate-900\/30,
+.light .bg-slate-900\/40,
+.light .bg-slate-900\/50,
+.light .bg-slate-900\/60,
+.light .bg-slate-900\/80,
+.light .bg-slate-950\/20,
+.light .bg-slate-950\/30,
+.light .bg-slate-950\/40,
+.light .bg-slate-950\/50,
+.light .bg-slate-950\/60,
+.light .bg-slate-950\/80 {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.06);
+}
+
+.light .bg-slate-950,
+.light .bg-slate-950\/90 {
+  background-color: #f1f5f9 !important;
+}
+
+.light .bg-slate-850,
+.light .bg-slate-800 {
+  background-color: #f8fafc !important;
+}
+
+/* Crisp Visible Borders in Light Mode */
+.light .border-border,
+.light .border-slate-900,
+.light .border-slate-900\/10,
+.light .border-slate-900\/20,
+.light .border-slate-900\/30,
+.light .border-slate-900\/40,
+.light .border-slate-900\/60,
+.light .border-slate-900\/80,
+.light .border-slate-800,
+.light .border-slate-800\/40,
+.light .border-slate-800\/60,
+.light .border-slate-800\/80,
+.light .border-slate-850,
+.light .border-slate-850\/40,
+.light .border-slate-850\/60 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Crisp Table Row Separators & Dividers in Light Mode */
+.light .divide-slate-850\/60 > *,
+.light .divide-slate-850 > *,
+.light .divide-slate-800 > *,
+.light .divide-slate-900 > *,
+.light .divide-slate-900\/60 > *,
+.light .divide-slate-900\/80 > *,
+.light .divide-y > * {
+  border-color: #e2e8f0 !important;
+}
+
+/* Light Mode Input & Form Control Visibility */
+.light input:not([type="checkbox"]):not([type="radio"]),
+.light select,
+.light textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.light input[type="date"],
+.light input[type="datetime-local"],
+.light input[type="time"] {
+  color-scheme: light !important;
+}
+
+.light input::placeholder,
+.light textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Text Legibility in Light Mode */
+.light .text-slate-50,
+.light .text-slate-100,
+.light .text-slate-150,
+.light .text-slate-155,
+.light .text-slate-200,
+.light .text-slate-250,
+.light .text-slate-300,
+.light .text-slate-350,
+.light .text-slate-900,
+.light .text-slate-950 {
+  color: #0f172a !important;
+}
+
+.light .text-slate-400,
+.light .text-slate-450 {
+  color: #475569 !important;
+}
+
+.light .text-slate-500,
+.light .text-slate-505 {
+  color: #64748b !important;
+}
+
+/* Table Row and Interactive Hover States in Light Mode */
+.light tr:hover,
+.light tr.group:hover,
+.light tbody tr:hover,
+.light tbody tr:hover > td,
+.light tbody tr.group:hover > td,
+.light .hover\:bg-slate-850\/40:hover,
+.light .hover\:bg-slate-850\/50:hover,
+.light .hover\:bg-slate-850\/60:hover,
+.light .hover\:bg-slate-850:hover,
+.light .hover\:bg-slate-800:hover,
+.light .hover\:bg-slate-800\/40:hover,
+.light .hover\:bg-slate-800\/50:hover,
+.light .hover\:bg-slate-800\/60:hover,
+.light .hover\:bg-slate-800\/80:hover,
+.light .hover\:bg-slate-900\/20:hover,
+.light .hover\:bg-slate-900\/25:hover,
+.light .hover\:bg-slate-900\/30:hover,
+.light .hover\:bg-slate-900\/40:hover,
+.light .hover\:bg-slate-900\/50:hover,
+.light .hover\:bg-slate-900:hover,
+.light .hover\:bg-slate-950\/20:hover,
+.light .hover\:bg-indigo-950\/20:hover {
+  background-color: #f1f5f9 !important;
+}
+
+/* Sticky columns inside hovered table rows */
+.light tr:hover > .sticky,
+.light tr.group:hover > .sticky,
+.light tr:hover .group-hover\:bg-slate-850,
+.light tr.group:hover .group-hover\:bg-slate-850,
+.light .group:hover .group-hover\:bg-slate-850 {
+  background-color: #f1f5f9 !important;
+}
+
+/* Sticky column shadow and border in Light Mode */
+.light .shadow-\[2px_0_5px_rgba\(0\,0\,0\,0\.4\)\] {
+  box-shadow: 2px 0 6px rgba(15, 23, 42, 0.08) !important;
+  border-right: 1px solid #e2e8f0;
+}
+
+/* Red / Rose / Danger Zone Visibility Fixes in Light Mode */
+.light .text-rose-400,
+.light .text-red-400,
+.light .text-rose-500,
+.light .text-red-500 {
+  color: #dc2626 !important;
+}
+
+.light .text-rose-300,
+.light .text-red-300 {
+  color: #b91c1c !important;
+}
+
+.light .bg-rose-950\/50,
+.light .bg-red-950\/50,
+.light .bg-rose-950\/40,
+.light .bg-red-950\/40,
+.light .bg-rose-950\/20,
+.light .bg-red-950\/20,
+.light .bg-red-950\/30,
+.light .bg-rose-950\/30 {
+  background-color: #fef2f2 !important;
+}
+
+.light .border-rose-900\/30,
+.light .border-red-900\/30,
+.light .border-rose-800,
+.light .border-red-800,
+.light .border-rose-900,
+.light .border-red-900,
+.light .border-rose-500\/20,
+.light .border-red-500\/20 {
+  border-color: #fca5a5 !important;
+}
+
+.light .bg-red-500\/10,
+.light .bg-rose-500\/10,
+.light .bg-red-500\/20,
+.light .bg-rose-500\/20 {
+  background-color: #fee2e2 !important;
+  color: #dc2626 !important;
+}
+
+/* Status Badges in Light Mode */
+.light .bg-emerald-500\/10,
+.light .bg-emerald-500\/20 {
+  background-color: #ecfdf5 !important;
+}
+.light .text-emerald-400 {
+  color: #059669 !important;
+}
+.light .border-emerald-500\/20 {
+  border-color: #a7f3d0 !important;
+}
+
+.light .bg-amber-500\/10,
+.light .bg-amber-500\/20 {
+  background-color: #fff7ed !important;
+}
+.light .text-amber-400 {
+  color: #d97706 !important;
+}
+.light .border-amber-500\/20 {
+  border-color: #fed7aa !important;
+}
+
+.light .bg-indigo-500\/10,
+.light .bg-indigo-500\/20,
+.light .bg-indigo-650\/15 {
+  background-color: #eff6ff !important;
+}
+.light .text-indigo-400 {
+  color: #2563eb !important;
+}
+.light .border-indigo-500\/20 {
+  border-color: #bfdbfe !important;
 }
 
 /* Ergonomic Modern Scrollbar */

@@ -115,17 +115,17 @@ export default function DashboardPage() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
         {/* Welcome Hero Banner */}
-        <section className="bg-gradient-to-r from-indigo-950/45 via-slate-900/60 to-blue-950/30 border border-slate-900 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
+        <section className="bg-gradient-to-r from-indigo-50/80 via-white to-blue-50/60 dark:from-indigo-950/45 dark:via-slate-900/60 dark:to-blue-950/30 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden shadow-xs">
           <div className="absolute top-0 right-0 w-[30%] h-[100%] rounded-full bg-indigo-500/5 blur-[80px]" />
           <div className="flex items-center gap-5">
-            <div className="h-16 w-16 bg-slate-850 border border-slate-800 rounded-full flex items-center justify-center text-indigo-400 shadow-inner">
+            <div className="h-16 w-16 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-xs">
               <User className="w-8 h-8" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-slate-100">
+              <h2 className="text-2xl font-bold text-foreground">
                 Hello, {user?.firstName || 'User'} {user?.lastName || ''}
               </h2>
-              <p className="text-slate-400 text-sm mt-1">{user?.email}</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">{user?.email}</p>
             </div>
           </div>
 
@@ -170,14 +170,14 @@ export default function DashboardPage() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="px-3 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-250 text-xs focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
+                  className="px-3 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-250 text-xs focus:outline-none focus:border-indigo-500 dark:[color-scheme:dark]"
                 />
                 <span className="text-slate-500 text-xs">to</span>
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="px-3 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-250 text-xs focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
+                  className="px-3 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-250 text-xs focus:outline-none focus:border-indigo-500 dark:[color-scheme:dark]"
                 />
               </div>
             )}
@@ -227,7 +227,7 @@ export default function DashboardPage() {
             {/* Metrics Ribbon Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
               {/* Active Projects */}
-              <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 flex flex-col justify-between">
+              <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 flex flex-col justify-between shadow-xs hover:border-slate-300 dark:hover:border-slate-800 transition-colors">
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active Projects</span>
                   <div className="p-1.5 bg-indigo-500/10 rounded-lg">
@@ -235,13 +235,13 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <span className="text-3xl font-black text-slate-50">{report.metrics.activeProjectsCount}</span>
+                  <span className="text-3xl font-black text-foreground">{report.metrics.activeProjectsCount}</span>
                   <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mt-1.5">Organization Projects</p>
                 </div>
               </div>
 
               {/* My Open Tasks */}
-              <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 flex flex-col justify-between">
+              <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 flex flex-col justify-between shadow-xs hover:border-slate-300 dark:hover:border-slate-800 transition-colors">
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">My Open Tasks</span>
                   <div className="p-1.5 bg-blue-500/10 rounded-lg">
@@ -249,13 +249,13 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <span className="text-3xl font-black text-slate-50">{report.metrics.openAssignedTasks}</span>
+                  <span className="text-3xl font-black text-foreground">{report.metrics.openAssignedTasks}</span>
                   <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mt-1.5">Assigned to me</p>
                 </div>
               </div>
 
               {/* My Overdue Tasks */}
-              <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 flex flex-col justify-between">
+              <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 flex flex-col justify-between shadow-xs hover:border-slate-300 dark:hover:border-slate-800 transition-colors">
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">My Overdue Tasks</span>
                   <div className="p-1.5 bg-rose-500/10 rounded-lg">
@@ -263,13 +263,13 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <span className="text-3xl font-black text-rose-400">{report.metrics.overdueAssignedTasks}</span>
+                  <span className="text-3xl font-black text-rose-600 dark:text-rose-400">{report.metrics.overdueAssignedTasks}</span>
                   <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mt-1.5">Action required</p>
                 </div>
               </div>
 
               {/* Logged This Week */}
-              <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 flex flex-col justify-between">
+              <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 flex flex-col justify-between shadow-xs hover:border-slate-300 dark:hover:border-slate-800 transition-colors">
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Logged This Week</span>
                   <div className="p-1.5 bg-emerald-500/10 rounded-lg">
@@ -277,7 +277,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <span className="text-3xl font-black text-slate-50">{report.metrics.hoursLoggedThisWeek.toFixed(1)}h</span>
+                  <span className="text-3xl font-black text-foreground">{report.metrics.hoursLoggedThisWeek.toFixed(1)}h</span>
                   <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mt-1.5">Time sheet totals</p>
                 </div>
               </div>

@@ -58,6 +58,10 @@ export async function seedProduction(prisma: PrismaClient) {
     { name: 'VIEW_ALL_TASKS', description: 'Can view all tasks in organization-wide projects. If disabled, restricts global view to only tasks assigned to or reported by the user.' },
     { name: 'VIEW_ALL_ISSUES', description: 'Can view all issues in organization-wide projects. If disabled, restricts global view to only issues assigned to or reported by the user.' },
     { name: 'VIEW_ALL_MILESTONES', description: 'Can view all milestones in organization-wide projects. If disabled, restricts global view to milestones of user\'s joined projects.' },
+    { name: 'CREATE_DOCUMENT', description: 'Can create and upload documents' },
+    { name: 'VIEW_DOCUMENT', description: 'Can view project documents' },
+    { name: 'UPDATE_DOCUMENT', description: 'Can update document metadata and upload new versions' },
+    { name: 'DELETE_DOCUMENT', description: 'Can delete documents and folders' },
   ];
 
   const permissions: Record<string, any> = {};
@@ -254,7 +258,7 @@ export async function seedProduction(prisma: PrismaClient) {
     }
   }
 
-  const clientPerms = ['VIEW_PROJECT', 'VIEW_MILESTONE', 'VIEW_ALL_MILESTONES', 'VIEW_REPORT'];
+  const clientPerms = ['VIEW_PROJECT', 'VIEW_MILESTONE', 'VIEW_ALL_MILESTONES', 'VIEW_REPORT', 'VIEW_TASK'];
   for (const name of clientPerms) {
     if (permissions[name]) {
       await prisma.profilePermission.create({

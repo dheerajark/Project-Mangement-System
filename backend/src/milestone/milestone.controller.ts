@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { MilestoneService } from './milestone.service';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
@@ -7,7 +16,12 @@ import { GetCurrentUserId } from '../auth/decorators/get-current-user-id.decorat
 import { GetCurrentUser } from '../auth/decorators/get-current-user.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { MilestoneStatus } from '@prisma/client';
 
 @ApiTags('Milestones')
@@ -19,8 +33,13 @@ export class MilestoneController {
 
   @Get('milestones')
   @Permissions('VIEW_MILESTONE')
-  @ApiOperation({ summary: 'Get all milestones across projects with filtering' })
-  @ApiResponse({ status: 200, description: 'Milestones retrieved successfully.' })
+  @ApiOperation({
+    summary: 'Get all milestones across projects with filtering',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Milestones retrieved successfully.',
+  })
   getAllMilestones(
     @TenantId() organizationId: string,
     @GetCurrentUserId() userId: string,
@@ -29,11 +48,16 @@ export class MilestoneController {
     @Query('status') status?: MilestoneStatus,
     @Query('search') search?: string,
   ) {
-    return this.milestoneService.getAllMilestones(organizationId, userId, permissions, {
-      projectId,
-      status,
-      search,
-    });
+    return this.milestoneService.getAllMilestones(
+      organizationId,
+      userId,
+      permissions,
+      {
+        projectId,
+        status,
+        search,
+      },
+    );
   }
 
   @Post('projects/:projectId/milestones')
@@ -46,44 +70,71 @@ export class MilestoneController {
     @Param('projectId') projectId: string,
     @Body() dto: CreateMilestoneDto,
   ) {
-    return this.milestoneService.createMilestone(organizationId, userId, projectId, dto);
+    return this.milestoneService.createMilestone(
+      organizationId,
+      userId,
+      projectId,
+      dto,
+    );
   }
 
   @Get('projects/:projectId/milestones')
   @Permissions('VIEW_MILESTONE')
   @ApiOperation({ summary: 'Get all active milestones of a project' })
-  @ApiResponse({ status: 200, description: 'List of milestones retrieved successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of milestones retrieved successfully.',
+  })
   findAll(
     @TenantId() organizationId: string,
     @GetCurrentUserId() userId: string,
     @Param('projectId') projectId: string,
   ) {
-    return this.milestoneService.getProjectMilestones(organizationId, userId, projectId);
+    return this.milestoneService.getProjectMilestones(
+      organizationId,
+      userId,
+      projectId,
+    );
   }
 
   @Get('milestones/:id')
   @Permissions('VIEW_MILESTONE')
   @ApiOperation({ summary: 'Get milestone details by ID' })
-  @ApiResponse({ status: 200, description: 'Milestone details retrieved successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Milestone details retrieved successfully.',
+  })
   findOne(
     @TenantId() organizationId: string,
     @GetCurrentUserId() userId: string,
     @Param('id') milestoneId: string,
   ) {
-    return this.milestoneService.getMilestoneById(organizationId, userId, milestoneId);
+    return this.milestoneService.getMilestoneById(
+      organizationId,
+      userId,
+      milestoneId,
+    );
   }
 
   @Patch('milestones/:id')
   @Permissions('EDIT_MILESTONE')
   @ApiOperation({ summary: 'Update milestone details' })
-  @ApiResponse({ status: 200, description: 'Milestone details updated successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Milestone details updated successfully.',
+  })
   update(
     @TenantId() organizationId: string,
     @GetCurrentUserId() userId: string,
     @Param('id') milestoneId: string,
     @Body() dto: UpdateMilestoneDto,
   ) {
-    return this.milestoneService.updateMilestone(organizationId, userId, milestoneId, dto);
+    return this.milestoneService.updateMilestone(
+      organizationId,
+      userId,
+      milestoneId,
+      dto,
+    );
   }
 
   @Post('milestones/:id/archive')
@@ -95,6 +146,10 @@ export class MilestoneController {
     @GetCurrentUserId() userId: string,
     @Param('id') milestoneId: string,
   ) {
-    return this.milestoneService.archiveMilestone(organizationId, userId, milestoneId);
+    return this.milestoneService.archiveMilestone(
+      organizationId,
+      userId,
+      milestoneId,
+    );
   }
 }

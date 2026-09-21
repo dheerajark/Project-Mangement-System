@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
@@ -11,7 +15,11 @@ export class InvitationService {
     private auditService: AuditService,
   ) {}
 
-  async createInvitation(organizationId: string, currentUserId: string, dto: CreateInvitationDto) {
+  async createInvitation(
+    organizationId: string,
+    currentUserId: string,
+    dto: CreateInvitationDto,
+  ) {
     // 1. Check if email is already taken by a registered user
     const existingUser = await this.prisma.user.findFirst({
       where: {
@@ -20,7 +28,9 @@ export class InvitationService {
       },
     });
     if (existingUser) {
-      throw new ForbiddenException('User with this email already exists in the system');
+      throw new ForbiddenException(
+        'User with this email already exists in the system',
+      );
     }
 
     // 1.5. Validate allowed email domains from organization settings
@@ -32,7 +42,7 @@ export class InvitationService {
         .split(',')
         .map((d) => d.trim().toLowerCase())
         .filter((d) => d.length > 0);
-      
+
       if (allowedDomains.length > 0) {
         const emailDomain = dto.email.split('@')[1]?.toLowerCase();
         if (!emailDomain || !allowedDomains.includes(emailDomain)) {
@@ -53,7 +63,10 @@ export class InvitationService {
 
     // 3. Generate raw token and hash it
     const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
 
     // 4. Set expiration to 7 days from now
     const expiresAt = new Date();
@@ -125,7 +138,11 @@ export class InvitationService {
     });
   }
 
-  async revokeInvitation(organizationId: string, currentUserId: string, invitationId: string) {
+  async revokeInvitation(
+    organizationId: string,
+    currentUserId: string,
+    invitationId: string,
+  ) {
     const invitation = await this.prisma.invitation.findFirst({
       where: {
         id: invitationId,

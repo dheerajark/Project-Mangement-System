@@ -1,14 +1,29 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ProjectService } from './project.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
+import { UpdateProjectMemberDto } from './dto/update-project-member.dto';
 import { UpdateProjectSettingsDto } from './dto/update-project-settings.dto';
 import { TenantId } from '../auth/decorators/tenant-id.decorator';
 import { GetCurrentUserId } from '../auth/decorators/get-current-user-id.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 
 @ApiTags('Projects')
 @ApiBearerAuth()
@@ -32,7 +47,10 @@ export class ProjectController {
   @Get()
   @Permissions('VIEW_PROJECT')
   @ApiOperation({ summary: 'Get all accessible projects' })
-  @ApiResponse({ status: 200, description: 'List of projects retrieved successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of projects retrieved successfully.',
+  })
   findAll(
     @TenantId() organizationId: string,
     @GetCurrentUserId() userId: string,
@@ -43,36 +61,52 @@ export class ProjectController {
   @Get('templates')
   @Permissions('VIEW_PROJECT')
   @ApiOperation({ summary: 'Get all project templates' })
-  @ApiResponse({ status: 200, description: 'List of project templates retrieved successfully.' })
-  findTemplates(
-    @TenantId() organizationId: string,
-  ) {
+  @ApiResponse({
+    status: 200,
+    description: 'List of project templates retrieved successfully.',
+  })
+  findTemplates(@TenantId() organizationId: string) {
     return this.projectService.getTemplates(organizationId);
   }
 
   @Get(':id')
   @Permissions('VIEW_PROJECT')
   @ApiOperation({ summary: 'Get project details by ID' })
-  @ApiResponse({ status: 200, description: 'Project details retrieved successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Project details retrieved successfully.',
+  })
   findOne(
     @TenantId() organizationId: string,
     @GetCurrentUserId() userId: string,
     @Param('id') projectId: string,
   ) {
-    return this.projectService.getProjectById(organizationId, userId, projectId);
+    return this.projectService.getProjectById(
+      organizationId,
+      userId,
+      projectId,
+    );
   }
 
   @Patch(':id')
   @Permissions('EDIT_PROJECT')
   @ApiOperation({ summary: 'Update project details' })
-  @ApiResponse({ status: 200, description: 'Project details updated successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Project details updated successfully.',
+  })
   update(
     @TenantId() organizationId: string,
     @GetCurrentUserId() userId: string,
     @Param('id') projectId: string,
     @Body() dto: UpdateProjectDto,
   ) {
-    return this.projectService.updateProject(organizationId, userId, projectId, dto);
+    return this.projectService.updateProject(
+      organizationId,
+      userId,
+      projectId,
+      dto,
+    );
   }
 
   @Post(':id/archive')
@@ -84,7 +118,11 @@ export class ProjectController {
     @GetCurrentUserId() userId: string,
     @Param('id') projectId: string,
   ) {
-    return this.projectService.archiveProject(organizationId, userId, projectId);
+    return this.projectService.archiveProject(
+      organizationId,
+      userId,
+      projectId,
+    );
   }
 
   @Post(':id/members')
@@ -97,7 +135,12 @@ export class ProjectController {
     @Param('id') projectId: string,
     @Body() dto: AddProjectMemberDto,
   ) {
-    return this.projectService.addProjectMember(organizationId, userId, projectId, dto);
+    return this.projectService.addProjectMember(
+      organizationId,
+      userId,
+      projectId,
+      dto,
+    );
   }
 
   @Delete(':id/members/:memberUserId')
@@ -110,19 +153,52 @@ export class ProjectController {
     @Param('id') projectId: string,
     @Param('memberUserId') memberUserId: string,
   ) {
-    return this.projectService.removeProjectMember(organizationId, userId, projectId, memberUserId);
+    return this.projectService.removeProjectMember(
+      organizationId,
+      userId,
+      projectId,
+      memberUserId,
+    );
+  }
+
+  @Patch(':id/members/:memberUserId')
+  @Permissions('EDIT_PROJECT')
+  @ApiOperation({ summary: 'Update project member role or hourly rate' })
+  @ApiResponse({ status: 200, description: 'Member updated successfully.' })
+  updateMember(
+    @TenantId() organizationId: string,
+    @GetCurrentUserId() userId: string,
+    @Param('id') projectId: string,
+    @Param('memberUserId') memberUserId: string,
+    @Body() dto: UpdateProjectMemberDto,
+  ) {
+    return this.projectService.updateProjectMember(
+      organizationId,
+      userId,
+      projectId,
+      memberUserId,
+      dto,
+    );
   }
 
   @Patch(':id/settings')
   @Permissions('EDIT_PROJECT')
   @ApiOperation({ summary: 'Update project settings' })
-  @ApiResponse({ status: 200, description: 'Project settings updated successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Project settings updated successfully.',
+  })
   updateSettings(
     @TenantId() organizationId: string,
     @GetCurrentUserId() userId: string,
     @Param('id') projectId: string,
     @Body() dto: UpdateProjectSettingsDto,
   ) {
-    return this.projectService.updateProjectSettings(organizationId, userId, projectId, dto);
+    return this.projectService.updateProjectSettings(
+      organizationId,
+      userId,
+      projectId,
+      dto,
+    );
   }
 }

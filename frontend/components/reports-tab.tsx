@@ -1,13 +1,20 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import TaskDetailDrawer from '@/components/task-detail-drawer';
+import StatusDistributionChart from '@/components/reports/status-distribution-chart';
+import PriorityDistributionChart from '@/components/reports/priority-distribution-chart';
+import CompletionRatioChart from '@/components/reports/completion-ratio-chart';
+import AssigneeWorkloadChart from '@/components/reports/assignee-workload-chart';
+import TimesheetReportsView from '@/components/reports/timesheet-reports-view';
 import {
   TrendingUp,
   Download,
   Calendar,
   Users,
+  UserX,
   CheckCircle2,
   Clock,
   AlertCircle,
@@ -15,49 +22,100 @@ import {
   Flag,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Activity,
-  UserCheck,
   AlertTriangle,
+  Layers,
+  CheckSquare,
+  ArrowUpRight,
+  Filter,
+  Search,
+  RefreshCw,
+  ListTodo,
+  FileSpreadsheet,
+  ArrowUpDown,
+  SlidersHorizontal,
 } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  CartesianGrid,
-} from 'recharts';
 
 interface ReportsTabProps {
   projectId: string;
 }
 
-const COLORS = ['#6366f1', '#10b981', '#f43f5e', '#f59e0b', '#8b5cf6', '#475569'];
-
 export default function ReportsTab({ projectId }: ReportsTabProps) {
   const [mounted, setMounted] = useState(false);
-  const [range, setRange] = useState<string>('30d');
+  const [activeReportType, setActiveReportType] = useState<'tasks' | 'timesheets'>('tasks');
+  const [range, setRange] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-  const [velocityView, setVelocityView] = useState<'weekly' | 'monthly'>('weekly');
-  const [sortField, setSortField] = useState<string>('assignedTasks');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('ALL');
+  const [taskListFilter, setTaskListFilter] = useState<string>('ALL');
+  const [milestoneFilter, setMilestoneFilter] = useState<string>('ALL');
+  const [upcomingWindowDays, setUpcomingWindowDays] = useState<number>(7);
 
-  // Handle mounting state to avoid hydration issues with Recharts
+  // Search & Sorting States
+  const [allTasksSearch, setAllTasksSearch] = useState<string>('');
+  const [overdueSearch, setOverdueSearch] = useState<string>('');
+  const [upcomingSearch, setUpcomingSearch] = useState<string>('');
+  const [completedSearch, setCompletedSearch] = useState<string>('');
+  const [assigneeSearch, setAssigneeSearch] = useState<string>('');
+  const [taskListSearch, setTaskListSearch] = useState<string>('');
+  const [milestoneSearch, setMilestoneSearch] = useState<string>('');
+
+  const [allTasksSortField, setAllTasksSortField] = useState<string>('rawTaskNumber');
+  const [allTasksSortOrder, setAllTasksSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const [overdueSortField, setOverdueSortField] = useState<string>('daysOverdue');
+  const [overdueSortOrder, setOverdueSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const [upcomingSortField, setUpcomingSortField] = useState<string>('dueDate');
+  const [upcomingSortOrder, setUpcomingSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const [completedSortField, setCompletedSortField] = useState<string>('completedDate');
+  const [completedSortOrder, setCompletedSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const [assigneeSortField, setAssigneeSortField] = useState<string>('totalTasks');
+  const [assigneeSortOrder, setAssigneeSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Active Detailed Table Tab (all | overdue | upcoming | completed)
+  const [activeTableTab, setActiveTableTab] = useState<'all' | 'overdue' | 'upcoming' | 'completed'>('all');
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  // Reset pagination on tab/filter/search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    activeTableTab,
+    range,
+    startDate,
+    endDate,
+    statusFilter,
+    priorityFilter,
+    assigneeFilter,
+    taskListFilter,
+    milestoneFilter,
+    allTasksSearch,
+    overdueSearch,
+    upcomingSearch,
+    completedSearch,
+    upcomingWindowDays,
+  ]);
+
+  // Interactive Task Drawer
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
+
+  // Hydration safety for charts
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Set default dates for custom date picker
+  // Set default dates for custom range
   useEffect(() => {
     if (range === 'custom') {
       const end = new Date();
@@ -68,16 +126,41 @@ export default function ReportsTab({ projectId }: ReportsTabProps) {
     }
   }, [range]);
 
-  // Fetch report data
-  const { data: report, isLoading, error } = useQuery({
-    queryKey: ['project-reports', projectId, range, startDate, endDate],
+  // Fetch Task Report data
+  const {
+    data: taskReport,
+    isLoading,
+    isRefetching,
+    refetch,
+    error,
+  } = useQuery({
+    queryKey: [
+      'project-task-reports-tab',
+      projectId,
+      range,
+      startDate,
+      endDate,
+      statusFilter,
+      priorityFilter,
+      assigneeFilter,
+      taskListFilter,
+      milestoneFilter,
+      upcomingWindowDays,
+    ],
     queryFn: async () => {
-      const params: Record<string, string> = { range };
+      const params: Record<string, any> = { range };
       if (range === 'custom' && startDate && endDate) {
         params.startDate = startDate;
         params.endDate = endDate;
       }
-      const res = await api.get(`/projects/${projectId}/reports/summary`, { params });
+      if (statusFilter !== 'ALL') params.status = statusFilter;
+      if (priorityFilter !== 'ALL') params.priority = priorityFilter;
+      if (assigneeFilter !== 'ALL') params.assigneeId = assigneeFilter;
+      if (taskListFilter !== 'ALL') params.taskListId = taskListFilter;
+      if (milestoneFilter !== 'ALL') params.milestoneId = milestoneFilter;
+      params.upcomingDays = upcomingWindowDays;
+
+      const res = await api.get(`/projects/${projectId}/reports/tasks`, { params });
       return res.data;
     },
     enabled: mounted && (range !== 'custom' || (!!startDate && !!endDate)),
@@ -85,624 +168,1568 @@ export default function ReportsTab({ projectId }: ReportsTabProps) {
 
   const handleExportCSV = async () => {
     try {
-      const res = await api.get(`/projects/${projectId}/reports/export`, {
+      const params: Record<string, string> = { range };
+      if (range === 'custom' && startDate && endDate) {
+        params.startDate = startDate;
+        params.endDate = endDate;
+      }
+      if (statusFilter !== 'ALL') params.status = statusFilter;
+      if (priorityFilter !== 'ALL') params.priority = priorityFilter;
+      if (assigneeFilter !== 'ALL') params.assigneeId = assigneeFilter;
+      if (taskListFilter !== 'ALL') params.taskListId = taskListFilter;
+      if (milestoneFilter !== 'ALL') params.milestoneId = milestoneFilter;
+
+      const res = await api.get(`/projects/${projectId}/reports/tasks/export`, {
+        params,
         responseType: 'blob',
       });
       const blob = new Blob([res.data], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `project-report-${projectId}.csv`);
+      link.setAttribute('download', `task-report-${projectId}.csv`);
       document.body.appendChild(link);
       link.click();
       link.remove();
     } catch (err) {
-      console.error('Failed to export CSV', err);
+      console.error('Failed to export CSV report', err);
     }
   };
 
-  const handleSort = (field: string) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('desc');
-    }
+  const handleOpenTask = (taskId: string) => {
+    setSelectedTaskId(taskId);
+    setIsTaskDrawerOpen(true);
   };
 
-  if (!mounted) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mx-auto" />
-          <p className="text-slate-400 text-sm">Loading Project Reports & Analytics...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !report) {
-    return (
-      <div className="bg-rose-950/20 border border-rose-900/60 text-rose-200 p-6 rounded-2xl flex items-start gap-4">
-        <AlertCircle className="w-6 h-6 text-rose-500 shrink-0" />
-        <div>
-          <h4 className="font-bold text-sm">Failed to load reports</h4>
-          <p className="text-rose-450/80 text-xs mt-1">
-            An error occurred while compiling reporting metrics. Please ensure you have permission to view project reports.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const { metrics, distributions, productivity, velocity, trends, topOverdueTasks } = report;
-
-  // Sorting productivity table data
-  const sortedProductivity = [...(productivity || [])].sort((a: any, b: any) => {
-    let aVal = a[sortField];
-    let bVal = b[sortField];
-    if (typeof aVal === 'string') {
-      aVal = aVal.toLowerCase();
-      bVal = bVal.toLowerCase();
-    }
-    if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-    if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  const getSortIcon = (field: string) => {
-    if (sortField !== field) return null;
-    return sortOrder === 'asc' ? (
-      <ChevronUp className="w-3.5 h-3.5 inline ml-1 text-indigo-400" />
-    ) : (
-      <ChevronDown className="w-3.5 h-3.5 inline ml-1 text-indigo-400" />
-    );
-  };
-
-  const getSeverityBadgeColor = (severity: string) => {
-    switch (severity) {
-      case 'CRITICAL':
-        return 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
-      case 'HIGH':
-        return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
-      case 'MEDIUM':
-        return 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'ACTIVE':
+      case 'DONE':
+      case 'ACHIEVED':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            {status}
+          </span>
+        );
+      case 'IN_PROGRESS':
+      case 'PLANNING':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+            {status.replace('_', ' ')}
+          </span>
+        );
+      case 'REVIEW':
+      case 'PLANNED':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+            {status}
+          </span>
+        );
+      case 'BLOCKED':
+      case 'MISSED':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 bg-rose-500/10 text-rose-400 border border-rose-500/20">
+            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+            {status}
+          </span>
+        );
       default:
-        return 'bg-slate-900 text-slate-400 border border-slate-800';
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 bg-slate-800 text-slate-400 border border-slate-700/50">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+            {status}
+          </span>
+        );
     }
   };
+
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'CRITICAL':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+            CRITICAL
+          </span>
+        );
+      case 'HIGH':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20">
+            HIGH
+          </span>
+        );
+      case 'MEDIUM':
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            MEDIUM
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            LOW
+          </span>
+        );
+    }
+  };
+
+  // Filtered & Sorted All Tasks
+  const filteredAllTasks = useMemo(() => {
+    if (!taskReport?.allTasks) return [];
+    let list = [...taskReport.allTasks];
+    if (allTasksSearch.trim()) {
+      const q = allTasksSearch.toLowerCase();
+      list = list.filter(
+        (t: any) =>
+          t.title.toLowerCase().includes(q) ||
+          t.taskNumber.toLowerCase().includes(q) ||
+          t.assignee.name.toLowerCase().includes(q) ||
+          (t.taskList && t.taskList.toLowerCase().includes(q)) ||
+          (t.milestone && t.milestone.toLowerCase().includes(q)),
+      );
+    }
+    list.sort((a: any, b: any) => {
+      let aVal = a[allTasksSortField];
+      let bVal = b[allTasksSortField];
+      if (allTasksSortField === 'assignee') {
+        aVal = a.assignee?.name || '';
+        bVal = b.assignee?.name || '';
+      }
+      if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = (bVal || '').toLowerCase();
+        return allTasksSortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      if (aVal < bVal) return allTasksSortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return allTasksSortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [taskReport?.allTasks, allTasksSearch, allTasksSortField, allTasksSortOrder]);
+
+  // Filtered & Sorted Overdue Tasks
+  const filteredOverdueTasks = useMemo(() => {
+    if (!taskReport?.overdueTasks) return [];
+    let list = [...taskReport.overdueTasks];
+    if (overdueSearch.trim()) {
+      const q = overdueSearch.toLowerCase();
+      list = list.filter(
+        (t: any) =>
+          t.title.toLowerCase().includes(q) ||
+          t.taskNumber.toLowerCase().includes(q) ||
+          t.assignee.name.toLowerCase().includes(q) ||
+          (t.taskList && t.taskList.toLowerCase().includes(q)) ||
+          (t.milestone && t.milestone.toLowerCase().includes(q)),
+      );
+    }
+    list.sort((a: any, b: any) => {
+      let aVal = a[overdueSortField];
+      let bVal = b[overdueSortField];
+      if (overdueSortField === 'assignee') {
+        aVal = a.assignee?.name || '';
+        bVal = b.assignee?.name || '';
+      }
+      if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = (bVal || '').toLowerCase();
+        return overdueSortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      if (aVal < bVal) return overdueSortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return overdueSortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [taskReport?.overdueTasks, overdueSearch, overdueSortField, overdueSortOrder]);
+
+  // Filtered & Sorted Upcoming Tasks
+  const filteredUpcomingTasks = useMemo(() => {
+    if (!taskReport?.upcomingTasks) return [];
+    let list = [...taskReport.upcomingTasks];
+    list = list.filter((t: any) => t.daysRemaining <= upcomingWindowDays);
+    if (upcomingSearch.trim()) {
+      const q = upcomingSearch.toLowerCase();
+      list = list.filter(
+        (t: any) =>
+          t.title.toLowerCase().includes(q) ||
+          t.taskNumber.toLowerCase().includes(q) ||
+          t.assignee.name.toLowerCase().includes(q) ||
+          (t.taskList && t.taskList.toLowerCase().includes(q)) ||
+          (t.milestone && t.milestone.toLowerCase().includes(q)),
+      );
+    }
+    list.sort((a: any, b: any) => {
+      let aVal = a[upcomingSortField];
+      let bVal = b[upcomingSortField];
+      if (upcomingSortField === 'assignee') {
+        aVal = a.assignee?.name || '';
+        bVal = b.assignee?.name || '';
+      }
+      if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = (bVal || '').toLowerCase();
+        return upcomingSortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      if (aVal < bVal) return upcomingSortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return upcomingSortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [taskReport?.upcomingTasks, upcomingSearch, upcomingSortField, upcomingSortOrder, upcomingWindowDays]);
+
+  // Filtered & Sorted Completed Tasks
+  const filteredCompletedTasks = useMemo(() => {
+    if (!taskReport?.completedTasks) return [];
+    let list = [...taskReport.completedTasks];
+    if (completedSearch.trim()) {
+      const q = completedSearch.toLowerCase();
+      list = list.filter(
+        (t: any) =>
+          t.title.toLowerCase().includes(q) ||
+          t.taskNumber.toLowerCase().includes(q) ||
+          t.assignee.name.toLowerCase().includes(q) ||
+          (t.taskList && t.taskList.toLowerCase().includes(q)) ||
+          (t.milestone && t.milestone.toLowerCase().includes(q)),
+      );
+    }
+    list.sort((a: any, b: any) => {
+      let aVal = a[completedSortField];
+      let bVal = b[completedSortField];
+      if (completedSortField === 'assignee') {
+        aVal = a.assignee?.name || '';
+        bVal = b.assignee?.name || '';
+      }
+      if (typeof aVal === 'string') {
+        aVal = aVal.toLowerCase();
+        bVal = (bVal || '').toLowerCase();
+        return completedSortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      if (aVal < bVal) return completedSortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return completedSortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [taskReport?.completedTasks, completedSearch, completedSortField, completedSortOrder]);
+
+  // Filtered Assignees
+  const filteredAssignees = useMemo(() => {
+    if (!taskReport?.tasksByAssignee) return [];
+    let list = [...taskReport.tasksByAssignee];
+    if (assigneeSearch.trim()) {
+      const q = assigneeSearch.toLowerCase();
+      list = list.filter((a: any) => a.name.toLowerCase().includes(q));
+    }
+    list.sort((a: any, b: any) => {
+      const aVal = a[assigneeSortField];
+      const bVal = b[assigneeSortField];
+      if (typeof aVal === 'string') {
+        return assigneeSortOrder === 'asc'
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
+      }
+      return assigneeSortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+    return list;
+  }, [taskReport?.tasksByAssignee, assigneeSearch, assigneeSortField, assigneeSortOrder]);
+
+  // Filtered Task Lists
+  const filteredTaskLists = useMemo(() => {
+    if (!taskReport?.taskListSummaries) return [];
+    if (!taskListSearch.trim()) return taskReport.taskListSummaries;
+    const q = taskListSearch.toLowerCase();
+    return taskReport.taskListSummaries.filter((tl: any) => tl.name.toLowerCase().includes(q));
+  }, [taskReport?.taskListSummaries, taskListSearch]);
+
+  // Filtered Milestones
+  const filteredMilestones = useMemo(() => {
+    if (!taskReport?.milestoneSummaries) return [];
+    if (!milestoneSearch.trim()) return taskReport.milestoneSummaries;
+    const q = milestoneSearch.toLowerCase();
+    return taskReport.milestoneSummaries.filter((m: any) => m.title.toLowerCase().includes(q));
+  }, [taskReport?.milestoneSummaries, milestoneSearch]);
+
+  // Current active list for pagination
+  const currentActiveList = useMemo(() => {
+    switch (activeTableTab) {
+      case 'all':
+        return filteredAllTasks;
+      case 'overdue':
+        return filteredOverdueTasks;
+      case 'upcoming':
+        return filteredUpcomingTasks;
+      case 'completed':
+        return filteredCompletedTasks;
+      default:
+        return [];
+    }
+  }, [
+    activeTableTab,
+    filteredAllTasks,
+    filteredOverdueTasks,
+    filteredUpcomingTasks,
+    filteredCompletedTasks,
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(currentActiveList.length / pageSize));
+  const paginatedList = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    return currentActiveList.slice(startIdx, startIdx + pageSize);
+  }, [currentActiveList, currentPage, pageSize]);
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/20 p-4 border border-slate-900 rounded-2xl backdrop-blur-md">
-        <div className="flex flex-wrap items-center gap-3.5">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
-            <Calendar className="w-4 h-4 text-indigo-400" />
-            <span>Reporting Window:</span>
-          </div>
+    <div className="space-y-6">
+      {/* Top Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-2 p-1.5 bg-slate-900/40 border border-slate-850/80 rounded-2xl w-fit backdrop-blur-xl">
+          <button
+            onClick={() => setActiveReportType('tasks')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeReportType === 'tasks'
+                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/20'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <CheckSquare className="w-4 h-4" />
+            <span>Task Reports</span>
+          </button>
 
-          <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-850">
-            {['7d', '30d', '90d', 'custom'].map((opt) => (
-              <button
-                key={opt}
-                onClick={() => setRange(opt)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize ${range === opt
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-slate-400 hover:text-slate-200'
-                  }`}
-              >
-                {opt === 'custom' ? 'Custom' : opt === '7d' ? '7 Days' : opt === '30d' ? '30 Days' : '90 Days'}
-              </button>
-            ))}
-          </div>
-
-          {range === 'custom' && (
-            <div className="flex items-center gap-2 animate-fade-in">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="px-3 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-250 text-xs focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
-              />
-              <span className="text-slate-500 text-xs">to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="px-3 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-250 text-xs focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
-              />
-            </div>
-          )}
+          <button
+            onClick={() => setActiveReportType('timesheets')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeReportType === 'timesheets'
+                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/20'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>Timesheet Reports</span>
+          </button>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          className="px-4.5 py-2.5 bg-slate-900 border border-slate-800 hover:bg-slate-850 text-slate-100 rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg"
-        >
-          <Download className="w-4 h-4 text-indigo-400" />
-          Export CSV Summary
-        </button>
+        {activeReportType === 'tasks' && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportCSV}
+              disabled={!taskReport || isLoading}
+              className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl font-semibold shadow-lg text-xs active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Export CSV</span>
+            </button>
+
+            <button
+              onClick={() => refetch()}
+              disabled={isLoading || isRefetching}
+              className="p-2 bg-slate-950 hover:bg-slate-900 border border-slate-850 text-slate-300 hover:text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              title="Refresh Data"
+            >
+              <RefreshCw className={`w-4 h-4 text-indigo-400 ${isLoading || isRefetching ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Summary Ribbon Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Tasks Card */}
-        <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 relative overflow-hidden flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Task Progress</span>
-            <div className="p-1.5 bg-indigo-500/10 rounded-lg">
-              <CheckCircle2 className="w-4.5 h-4.5 text-indigo-400" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-black text-slate-50">{metrics.completedTasks}</span>
-              <span className="text-xs text-slate-500">/ {metrics.totalTasks} Done</span>
-            </div>
-            <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden mt-3 border border-slate-900">
-              <div
-                className="bg-indigo-500 h-full rounded-full transition-all duration-500"
-                style={{ width: `${metrics.progress}%` }}
-              />
-            </div>
-            <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 uppercase mt-2">
-              <span>{Math.round(metrics.progress)}% Complete</span>
-              <span className="text-rose-450">{metrics.overdueTasks} Overdue</span>
-            </div>
-          </div>
-        </article>
-
-        {/* Time Logs Card */}
-        <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 relative overflow-hidden flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Time Logs</span>
-            <div className="p-1.5 bg-emerald-500/10 rounded-lg">
-              <Clock className="w-4.5 h-4.5 text-emerald-400" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-black text-slate-50">{metrics.totalHoursLogged.toFixed(1)}h</span>
-              <span className="text-xs text-slate-500">Logged</span>
-            </div>
-            <div className="text-[10px] font-semibold text-slate-450 mt-1.5">
-              Estimated: <span className="font-mono text-slate-300">{metrics.totalEstimatedHours}h total</span>
-            </div>
-            <span className="text-[9px] font-bold text-emerald-400 uppercase bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/10 inline-block mt-3">
-              Read-Only Logs
-            </span>
-          </div>
-        </article>
-
-        {/* Issues Card */}
-        <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 relative overflow-hidden flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Issues Analytics</span>
-            <div className="p-1.5 bg-rose-500/10 rounded-lg">
-              <AlertCircle className="w-4.5 h-4.5 text-rose-400" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-black text-slate-50">{metrics.openIssues}</span>
-              <span className="text-xs text-slate-500">Active Issues</span>
-            </div>
-            <div className="flex justify-between items-center text-[10px] font-semibold text-slate-450 mt-1">
-              <span>Resolved: {metrics.resolvedIssues}</span>
-              <span className="text-rose-400 font-bold">Critical: {metrics.criticalIssues}</span>
-            </div>
-            <div className="text-[9px] font-semibold text-slate-500 mt-2">
-              Avg resolution: <span className="text-slate-350">{metrics.avgResolutionTimeHours.toFixed(1)}h</span>
-            </div>
-          </div>
-        </article>
-
-        {/* Milestones Card */}
-        <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 md:p-6 relative overflow-hidden flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Milestones</span>
-            <div className="p-1.5 bg-violet-500/10 rounded-lg">
-              <Flag className="w-4.5 h-4.5 text-violet-400" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-black text-slate-50">{metrics.achievedMilestones}</span>
-              <span className="text-xs text-slate-500">/ {metrics.totalMilestones} Achieved</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[9px] font-bold uppercase mt-2.5">
-              <span className="text-indigo-400">Planned: {metrics.plannedMilestones}</span>
-              <span className="text-emerald-400">Active: {metrics.inProgressMilestones}</span>
-              <span className="text-rose-400 col-span-2">Missed Target: {metrics.missedMilestones}</span>
-            </div>
-          </div>
-        </article>
-      </div>
-
-      {/* Distributions (Donuts) Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Task Status Distribution */}
-        <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 relative overflow-hidden">
-          <h3 className="font-bold text-xs text-slate-300 uppercase tracking-wider mb-6 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-indigo-400" />
-            Task Status Distribution
-          </h3>
-          <div className="h-64 flex flex-col sm:flex-row items-center justify-center gap-4">
-            {distributions.taskStatus.some((d: any) => d.count > 0) ? (
-              <>
-                <div className="w-full sm:w-[60%] h-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={distributions.taskStatus.filter((d: any) => d.count > 0)}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={4}
-                        dataKey="count"
-                        nameKey="status"
-                      >
-                        {distributions.taskStatus.filter((d: any) => d.count > 0).map((entry: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#0f172a',
-                          border: '1px solid #1e293b',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          color: '#f8fafc',
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex flex-col gap-2 shrink-0">
-                  {distributions.taskStatus.map((d: any, idx: number) => (
-                    <div key={d.status} className="flex items-center gap-2.5 text-xs">
-                      <div
-                        className="w-3 h-3 rounded-full border border-white/10"
-                        style={{ backgroundColor: COLORS[idx % COLORS.length] }}
-                      />
-                      <span className="text-slate-400 capitalize">{d.status.toLowerCase().replace('_', ' ')}</span>
-                      <span className="font-bold text-slate-200">({d.count})</span>
-                    </div>
+      {activeReportType === 'timesheets' ? (
+        <TimesheetReportsView initialProjectId={projectId} isProjectLevel={true} />
+      ) : (
+        <>
+          {/* Filter Bar */}
+          <section className="bg-slate-900/30 border border-slate-900 rounded-2xl p-5 space-y-4 backdrop-blur-md shadow-xl">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Date Window */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Window:</span>
+                </span>
+                <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-850">
+                  {['all', '7d', '30d', '90d', 'custom'].map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => setRange(opt)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all capitalize cursor-pointer ${
+                        range === opt
+                          ? 'bg-indigo-600 text-white shadow'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {opt === 'all'
+                        ? 'All Time'
+                        : opt === 'custom'
+                        ? 'Custom'
+                        : opt === '7d'
+                        ? '7 Days'
+                        : opt === '30d'
+                        ? '30 Days'
+                        : '90 Days'}
+                    </button>
                   ))}
                 </div>
-              </>
-            ) : (
-              <div className="text-slate-500 text-xs py-12">No tasks available in this project</div>
-            )}
-          </div>
-        </article>
+              </div>
 
-        {/* Issue Status Distribution */}
-        <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 relative overflow-hidden">
-          <h3 className="font-bold text-xs text-slate-300 uppercase tracking-wider mb-6 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-450" />
-            Issue Status Distribution
-          </h3>
-          <div className="h-64 flex flex-col sm:flex-row items-center justify-center gap-4">
-            {distributions.issueStatus.some((d: any) => d.count > 0) ? (
-              <>
-                <div className="w-full sm:w-[60%] h-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={distributions.issueStatus.filter((d: any) => d.count > 0)}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={4}
-                        dataKey="count"
-                        nameKey="status"
-                      >
-                        {distributions.issueStatus.filter((d: any) => d.count > 0).map((entry: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#0f172a',
-                          border: '1px solid #1e293b',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          color: '#f8fafc',
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+              {/* Custom Dates */}
+              {range === 'custom' && (
+                <div className="flex items-center gap-2 animate-fade-in">
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="px-2.5 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
+                  />
+                  <span className="text-slate-500 text-xs font-semibold">to</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="px-2.5 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 [color-scheme:dark]"
+                  />
                 </div>
-                <div className="flex flex-col gap-2 shrink-0">
-                  {distributions.issueStatus.map((d: any, idx: number) => (
-                    <div key={d.status} className="flex items-center gap-2.5 text-xs">
-                      <div
-                        className="w-3 h-3 rounded-full border border-white/10"
-                        style={{ backgroundColor: COLORS[(idx + 2) % COLORS.length] }}
-                      />
-                      <span className="text-slate-400 capitalize">{d.status.toLowerCase()}</span>
-                      <span className="font-bold text-slate-200">({d.count})</span>
-                    </div>
+              )}
+
+              {/* Status Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Status:
+                </span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="ALL">All Statuses</option>
+                  {taskReport?.filterOptions?.statuses?.map((st: string) => (
+                    <option key={st} value={st}>
+                      {st.replace(/_/g, ' ')}
+                    </option>
                   ))}
-                </div>
-              </>
-            ) : (
-              <div className="text-slate-500 text-xs py-12">No issues registered in this project</div>
-            )}
-          </div>
-        </article>
-      </div>
+                </select>
+              </div>
 
-      {/* Task Velocity and Overdue Trends */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Task Velocity */}
-        <article className="lg:col-span-2 bg-slate-900/30 border border-slate-900 rounded-2xl p-6 relative overflow-hidden">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-xs text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-indigo-400" />
-              Task Delivery Velocity
-            </h3>
-            <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-850">
-              <button
-                onClick={() => setVelocityView('weekly')}
-                className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase transition-all ${velocityView === 'weekly' ? 'bg-indigo-600 text-white shadow' : 'text-slate-500 hover:text-slate-350'
-                  }`}
-              >
-                Weekly
-              </button>
-              <button
-                onClick={() => setVelocityView('monthly')}
-                className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase transition-all ${velocityView === 'monthly' ? 'bg-indigo-600 text-white shadow' : 'text-slate-500 hover:text-slate-350'
-                  }`}
-              >
-                Monthly
-              </button>
-            </div>
-          </div>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={velocityView === 'weekly' ? velocity.weekly : velocity.monthly}
-                margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis
-                  dataKey={velocityView === 'weekly' ? 'week' : 'month'}
-                  stroke="#475569"
-                  fontSize={10}
-                  tickLine={false}
-                />
-                <YAxis stroke="#475569" fontSize={10} tickLine={false} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0f172a',
-                    border: '1px solid #1e293b',
-                    borderRadius: '12px',
-                    fontSize: '11px',
-                    color: '#f8fafc',
-                  }}
-                />
-                <Bar dataKey="completedTasks" name="Completed Tasks" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </article>
+              {/* Priority Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Priority:
+                </span>
+                <select
+                  value={priorityFilter}
+                  onChange={(e) => setPriorityFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="ALL">All Priorities</option>
+                  {taskReport?.filterOptions?.priorities?.map((pr: string) => (
+                    <option key={pr} value={pr}>
+                      {pr}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-        {/* Overdue Task Trend */}
-        <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 relative overflow-hidden">
-          <h3 className="font-bold text-xs text-slate-300 uppercase tracking-wider mb-6 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-            Overdue Tasks Trend
-          </h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trends.overdue} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis
-                  dataKey="date"
-                  stroke="#475569"
-                  fontSize={9}
-                  tickLine={false}
-                  tickFormatter={(tick) => tick.substring(5)}
-                />
-                <YAxis stroke="#475569" fontSize={10} tickLine={false} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0f172a',
-                    border: '1px solid #1e293b',
-                    borderRadius: '12px',
-                    fontSize: '11px',
-                    color: '#f8fafc',
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="count"
-                  name="Overdue Tasks"
-                  stroke="#f43f5e"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </article>
-      </div>
+              {/* Assignee Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Assignee:
+                </span>
+                <select
+                  value={assigneeFilter}
+                  onChange={(e) => setAssigneeFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[150px]"
+                >
+                  <option value="ALL">All Assignees</option>
+                  <option value="UNASSIGNED">Unassigned</option>
+                  {taskReport?.tasksByAssignee
+                    ?.filter((a: any) => a.userId !== null)
+                    .map((a: any) => (
+                      <option key={a.userId} value={a.userId}>
+                        {a.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
 
-      {/* Daily Tracked Hours Area Chart */}
-      <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 relative overflow-hidden">
-        <h3 className="font-bold text-xs text-slate-300 uppercase tracking-wider mb-6 flex items-center gap-2">
-          <Clock className="w-4 h-4 text-emerald-400" />
-          Hours Tracked Timeline
-        </h3>
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={trends.hoursLogged} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis
-                dataKey="date"
-                stroke="#475569"
-                fontSize={9}
-                tickLine={false}
-                tickFormatter={(tick) => tick.substring(5)}
-              />
-              <YAxis stroke="#475569" fontSize={10} tickLine={false} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#0f172a',
-                  border: '1px solid #1e293b',
-                  borderRadius: '12px',
-                  fontSize: '11px',
-                  color: '#f8fafc',
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="hours"
-                name="Hours Tracked"
-                stroke="#10b981"
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#colorHours)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </article>
-
-      {/* Top 5 Overdue Tasks and Member Productivity Table */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Top 5 Overdue Tasks Table */}
-        <article className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 flex flex-col justify-between overflow-hidden">
-          <div>
-            <h3 className="font-bold text-xs text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2 text-rose-400">
-              <AlertTriangle className="w-4 h-4 text-rose-450" />
-              Top 5 Overdue Tasks
-            </h3>
-            {topOverdueTasks.length > 0 ? (
-              <div className="space-y-3.5 mt-2">
-                {topOverdueTasks.map((t: any) => (
-                  <div
-                    key={t.id}
-                    className="p-3.5 bg-slate-950/60 border border-slate-900 rounded-xl flex items-start justify-between gap-3"
+              {/* Task List Filter */}
+              {taskReport?.filterOptions?.taskLists?.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    List:
+                  </span>
+                  <select
+                    value={taskListFilter}
+                    onChange={(e) => setTaskListFilter(e.target.value)}
+                    className="px-2.5 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[150px]"
                   >
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[9px] px-1.5 py-0.5 bg-slate-900 border border-slate-850 rounded text-slate-400 font-semibold shrink-0">
-                          {t.taskNumber}
-                        </span>
-                        <span className={`px-1.5 py-0.2 rounded text-[7.5px] font-bold border uppercase tracking-wider shrink-0 ${getSeverityBadgeColor(t.priority)}`}>
-                          {t.priority}
-                        </span>
-                      </div>
-                      <h4 className="font-bold text-xs text-slate-200 line-clamp-1 leading-snug">{t.title}</h4>
-                      <p className="text-[9px] text-slate-500 truncate">Assignee: {t.assignee}</p>
+                    <option value="ALL">All Lists</option>
+                    <option value="UNASSIGNED">No Task List</option>
+                    {taskReport.filterOptions.taskLists.map((tl: any) => (
+                      <option key={tl.id} value={tl.id}>
+                        {tl.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Milestone Filter */}
+              {taskReport?.filterOptions?.milestones?.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Milestone:
+                  </span>
+                  <select
+                    value={milestoneFilter}
+                    onChange={(e) => setMilestoneFilter(e.target.value)}
+                    className="px-2.5 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer max-w-[150px]"
+                  >
+                    <option value="ALL">All Milestones</option>
+                    <option value="UNASSIGNED">No Milestone</option>
+                    {taskReport.filterOptions.milestones.map((m: any) => (
+                      <option key={m.id} value={m.id}>
+                        {m.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Loading & Error States */}
+          {isLoading ? (
+            <div className="min-h-[350px] flex flex-col items-center justify-center space-y-4 bg-slate-900/20 border border-slate-900 rounded-2xl p-12">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+              <p className="text-slate-400 text-xs font-semibold">
+                Compiling project task reports and workload metrics...
+              </p>
+            </div>
+          ) : error || !taskReport ? (
+            <div className="bg-rose-950/20 border border-rose-900/60 text-rose-200 p-8 rounded-2xl flex items-start gap-4">
+              <AlertCircle className="w-8 h-8 text-rose-500 shrink-0" />
+              <div className="space-y-1">
+                <h3 className="font-bold text-sm text-rose-300">Unable to load task reports</h3>
+                <p className="text-xs text-rose-400/90 leading-relaxed">
+                  {(error as any)?.response?.data?.message || 'Permission denied or failed to retrieve reports.'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* KPI Ribbon (7 Cards) */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+                {/* Total Tasks */}
+                <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden shadow-lg">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Total Tasks
+                  </span>
+                  <div className="mt-2.5">
+                    <div className="text-2xl font-black text-slate-100">
+                      {taskReport.kpis.totalTasks}
                     </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-[10px] font-bold text-rose-400 bg-rose-500/5 px-2 py-0.5 rounded border border-rose-500/10">
-                        {t.daysOverdue}d late
-                      </span>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      {taskReport.kpis.totalEstimatedHours}h est.
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto opacity-40 mb-2" />
-                <p className="text-slate-500 text-xs">No overdue tasks in this project!</p>
-              </div>
-            )}
-          </div>
-        </article>
+                </div>
 
-        {/* Member Productivity Table */}
-        <article className="lg:col-span-2 bg-slate-900/30 border border-slate-900 rounded-2xl p-6 overflow-hidden">
-          <h3 className="font-bold text-xs text-slate-300 uppercase tracking-wider mb-6 flex items-center gap-2">
-            <Users className="w-4 h-4 text-indigo-400" />
-            Member Productivity Metrics
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-900 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                  <th
-                    onClick={() => handleSort('name')}
-                    className="pb-3.5 cursor-pointer hover:text-slate-300 transition-colors"
-                  >
-                    Team Member {getSortIcon('name')}
-                  </th>
-                  <th
-                    onClick={() => handleSort('assignedTasks')}
-                    className="pb-3.5 cursor-pointer hover:text-slate-300 text-right transition-colors"
-                  >
-                    Assigned {getSortIcon('assignedTasks')}
-                  </th>
-                  <th
-                    onClick={() => handleSort('completedTasks')}
-                    className="pb-3.5 cursor-pointer hover:text-slate-300 text-right transition-colors"
-                  >
-                    Completed {getSortIcon('completedTasks')}
-                  </th>
-                  <th
-                    onClick={() => handleSort('openTasks')}
-                    className="pb-3.5 cursor-pointer hover:text-slate-300 text-right transition-colors"
-                  >
-                    Open {getSortIcon('openTasks')}
-                  </th>
-                  <th
-                    onClick={() => handleSort('hoursLogged')}
-                    className="pb-3.5 cursor-pointer hover:text-slate-300 text-right transition-colors"
-                  >
-                    Hours Logged {getSortIcon('hoursLogged')}
-                  </th>
-                  <th
-                    onClick={() => handleSort('issuesResolved')}
-                    className="pb-3.5 cursor-pointer hover:text-slate-300 text-right transition-colors"
-                  >
-                    Issues Resolved {getSortIcon('issuesResolved')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-900/60">
-                {sortedProductivity.map((m: any) => (
-                  <tr key={m.userId} className="hover:bg-slate-950/20 transition-colors group">
-                    <td className="py-3.5 flex items-center gap-2.5 font-bold text-slate-200">
-                      <div className="w-6 h-6 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center shrink-0 text-[9px] uppercase">
-                        {m.name ? m.name[0] : '?'}
+                {/* Completed Tasks */}
+                <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden shadow-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
+                      Completed
+                    </span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  </div>
+                  <div className="mt-2.5">
+                    <div className="text-2xl font-black text-emerald-400">
+                      {taskReport.kpis.completedTasks}
+                    </div>
+                    <div className="text-[10px] text-emerald-400/80 font-bold mt-0.5">
+                      {taskReport.kpis.completionPercentage}% Rate
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pending Tasks */}
+                <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden shadow-lg">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Pending
+                  </span>
+                  <div className="mt-2.5">
+                    <div className="text-2xl font-black text-slate-200">
+                      {taskReport.kpis.pendingTasks}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      Awaiting completion
+                    </div>
+                  </div>
+                </div>
+
+                {/* In Progress Tasks */}
+                <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden shadow-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">
+                      In Progress
+                    </span>
+                    <Activity className="w-3.5 h-3.5 text-blue-400" />
+                  </div>
+                  <div className="mt-2.5">
+                    <div className="text-2xl font-black text-blue-400">
+                      {taskReport.kpis.inProgressTasks}
+                    </div>
+                    <div className="text-[10px] text-blue-400/80 font-semibold mt-0.5">
+                      Active work
+                    </div>
+                  </div>
+                </div>
+
+                {/* Overdue Tasks */}
+                <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden shadow-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">
+                      Overdue
+                    </span>
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                  </div>
+                  <div className="mt-2.5">
+                    <div className="text-2xl font-black text-rose-400">
+                      {taskReport.kpis.overdueTasks}
+                    </div>
+                    <div className="text-[10px] text-rose-400/80 font-semibold mt-0.5">
+                      Past due date
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tasks Due Soon */}
+                <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden shadow-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">
+                      Due Soon
+                    </span>
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  </div>
+                  <div className="mt-2.5">
+                    <div className="text-2xl font-black text-amber-400">
+                      {taskReport.kpis.dueSoonTasks}
+                    </div>
+                    <div className="text-[10px] text-amber-400/80 font-semibold mt-0.5">
+                      Next {upcomingWindowDays} days
+                    </div>
+                  </div>
+                </div>
+
+                {/* Unassigned Tasks */}
+                <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden shadow-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Unassigned
+                    </span>
+                    <UserX className="w-3.5 h-3.5 text-slate-400" />
+                  </div>
+                  <div className="mt-2.5">
+                    <div className="text-2xl font-black text-slate-200">
+                      {taskReport.kpis.unassignedTasks ?? 0}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      No owner assigned
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4 Reusable Charts Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <StatusDistributionChart
+                  data={taskReport.tasksByStatus}
+                  title="Tasks by Status"
+                />
+
+                <PriorityDistributionChart
+                  data={taskReport.tasksByPriority}
+                  title="Tasks by Priority"
+                />
+
+                <CompletionRatioChart
+                  totalTasks={taskReport.kpis.totalTasks}
+                  completedTasks={taskReport.kpis.completedTasks}
+                  pendingTasks={taskReport.kpis.pendingTasks}
+                  inProgressTasks={taskReport.kpis.inProgressTasks}
+                  overdueTasks={taskReport.kpis.overdueTasks}
+                  completionPercentage={taskReport.kpis.completionPercentage}
+                  title="Completed vs Pending Tasks"
+                />
+
+                <AssigneeWorkloadChart
+                  data={taskReport.tasksByAssignee}
+                  title="Tasks by Assignee Workload"
+                />
+              </div>
+
+              {/* Workload Breakdown Table */}
+              <section className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 space-y-4 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-bold text-xs text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                      <Users className="w-4 h-4 text-indigo-400" />
+                      <span>Workload Distribution Table</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        {taskReport.tasksByAssignee?.length || 0} Members
+                      </span>
+                    </h3>
+                  </div>
+
+                  <div className="relative min-w-[200px]">
+                    <input
+                      type="text"
+                      placeholder="Search assignees..."
+                      value={assigneeSearch}
+                      onChange={(e) => setAssigneeSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
+                    />
+                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  </div>
+                </div>
+
+                {filteredAssignees.length > 0 ? (
+                  <div className="overflow-x-auto rounded-xl border border-slate-900">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-900">
+                        <tr>
+                          <th
+                            onClick={() => {
+                              setAssigneeSortField('name');
+                              setAssigneeSortOrder(assigneeSortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            className="px-4 py-3.5 cursor-pointer hover:text-slate-200 transition-colors"
+                          >
+                            <div className="flex items-center gap-1">
+                              <span>Assignee</span>
+                              <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                            </div>
+                          </th>
+                          <th
+                            onClick={() => {
+                              setAssigneeSortField('totalTasks');
+                              setAssigneeSortOrder(assigneeSortOrder === 'asc' ? 'desc' : 'asc');
+                            }}
+                            className="px-4 py-3.5 text-right cursor-pointer hover:text-slate-200 transition-colors"
+                          >
+                            <div className="flex items-center justify-end gap-1">
+                              <span>Total Tasks</span>
+                              <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                            </div>
+                          </th>
+                          <th className="px-4 py-3.5 text-right text-emerald-400">Completed</th>
+                          <th className="px-4 py-3.5 text-right text-blue-400">In Progress</th>
+                          <th className="px-4 py-3.5 text-right text-slate-400">Pending</th>
+                          <th className="px-4 py-3.5 text-right text-rose-400">Overdue</th>
+                          <th className="px-4 py-3.5 min-w-[140px]">Progress</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-900 bg-slate-950/40">
+                        {filteredAssignees.map((a: any, idx: number) => (
+                          <tr key={a.userId || `unassigned-${idx}`} className="hover:bg-slate-900/40 transition-colors">
+                            <td className="px-4 py-3 font-bold text-slate-200 flex items-center gap-2.5">
+                              <div className="w-6 h-6 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center shrink-0 text-[10px] uppercase">
+                                {a.name ? a.name[0] : '?'}
+                              </div>
+                              <span className="truncate">{a.name}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right font-bold text-slate-200">
+                              {a.totalTasks}
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-emerald-400">
+                              {a.completedTasks}
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-blue-400">
+                              {a.inProgressTasks}
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-slate-400">
+                              {a.pendingTasks}
+                            </td>
+                            <td className="px-4 py-3 text-right font-bold text-rose-400">
+                              {a.overdueTasks > 0 ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                  {a.overdueTasks}
+                                </span>
+                              ) : (
+                                '0'
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                  <div
+                                    className="bg-indigo-500 h-full rounded-full transition-all duration-500"
+                                    style={{ width: `${a.progress}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-300 shrink-0">
+                                  {a.progress}%
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-slate-500 text-xs bg-slate-950/40 rounded-xl border border-slate-900">
+                    No assignees found matching query.
+                  </div>
+                )}
+              </section>
+
+              {/* Task List & Milestone Summary */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Task List Summary */}
+                <section className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 space-y-4 shadow-xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <h3 className="font-bold text-xs text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                      <ListTodo className="w-4 h-4 text-blue-400" />
+                      <span>Task List Summary</span>
+                    </h3>
+
+                    <div className="relative min-w-[150px]">
+                      <input
+                        type="text"
+                        placeholder="Filter lists..."
+                        value={taskListSearch}
+                        onChange={(e) => setTaskListSearch(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
+                      />
+                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    </div>
+                  </div>
+
+                  {filteredTaskLists.length > 0 ? (
+                    <div className="overflow-x-auto rounded-xl border border-slate-900 max-h-72 overflow-y-auto">
+                      <table className="w-full text-left text-xs text-slate-300">
+                        <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-900 sticky top-0">
+                          <tr>
+                            <th className="px-3 py-2.5">Task List</th>
+                            <th className="px-3 py-2.5 text-right">Total</th>
+                            <th className="px-3 py-2.5 text-right text-emerald-400">Done</th>
+                            <th className="px-3 py-2.5 text-right text-rose-400">Late</th>
+                            <th className="px-3 py-2.5 min-w-[90px]">Progress</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-900 bg-slate-950/40">
+                          {filteredTaskLists.map((tl: any) => (
+                            <tr key={tl.id || 'default-list'} className="hover:bg-slate-900/40 transition-colors">
+                              <td className="px-3 py-2 font-bold text-slate-200 truncate max-w-[150px]">
+                                {tl.name}
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-slate-300">
+                                {tl.totalTasks}
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-emerald-400">
+                                {tl.completedTasks}
+                              </td>
+                              <td className="px-3 py-2 text-right font-bold text-rose-400">
+                                {tl.overdueTasks > 0 ? tl.overdueTasks : 0}
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                    <div
+                                      className="bg-blue-500 h-full rounded-full"
+                                      style={{ width: `${tl.progress}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                                    {tl.progress}%
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-slate-500 text-xs bg-slate-950/40 rounded-xl border border-slate-900">
+                      No task lists found.
+                    </div>
+                  )}
+                </section>
+
+                {/* Milestone Summary */}
+                <section className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 space-y-4 shadow-xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <h3 className="font-bold text-xs text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                      <Flag className="w-4 h-4 text-violet-400" />
+                      <span>Milestone Summary</span>
+                    </h3>
+
+                    <div className="relative min-w-[150px]">
+                      <input
+                        type="text"
+                        placeholder="Filter milestones..."
+                        value={milestoneSearch}
+                        onChange={(e) => setMilestoneSearch(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
+                      />
+                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    </div>
+                  </div>
+
+                  {filteredMilestones.length > 0 ? (
+                    <div className="overflow-x-auto rounded-xl border border-slate-900 max-h-72 overflow-y-auto">
+                      <table className="w-full text-left text-xs text-slate-300">
+                        <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-900 sticky top-0">
+                          <tr>
+                            <th className="px-3 py-2.5">Milestone</th>
+                            <th className="px-3 py-2.5 text-right">Total</th>
+                            <th className="px-3 py-2.5 text-right text-emerald-400">Done</th>
+                            <th className="px-3 py-2.5 text-right text-rose-400">Late</th>
+                            <th className="px-3 py-2.5 min-w-[90px]">Progress</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-900 bg-slate-950/40">
+                          {filteredMilestones.map((m: any) => (
+                            <tr key={m.id || 'no-milestone'} className="hover:bg-slate-900/40 transition-colors">
+                              <td className="px-3 py-2 font-bold text-slate-200 truncate max-w-[150px]">
+                                {m.title}
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-slate-300">
+                                {m.totalTasks}
+                              </td>
+                              <td className="px-3 py-2 text-right font-semibold text-emerald-400">
+                                {m.completedTasks}
+                              </td>
+                              <td className="px-3 py-2 text-right font-bold text-rose-400">
+                                {m.overdueTasks > 0 ? m.overdueTasks : 0}
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                    <div
+                                      className="bg-violet-500 h-full rounded-full"
+                                      style={{ width: `${m.progress}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                                    {m.progress}%
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-slate-500 text-xs bg-slate-950/40 rounded-xl border border-slate-900">
+                      No milestones found.
+                    </div>
+                  )}
+                </section>
+              </div>
+
+              {/* Detailed Task Report Tables with Pagination */}
+              <section className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 space-y-6 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-900/80 pb-4">
+                  {/* Tab Selector */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setActiveTableTab('all')}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        activeTableTab === 'all'
+                          ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/40'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-950'
+                      }`}
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>All Tasks</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-500/20 text-indigo-300">
+                        {taskReport.allTasks?.length || 0}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTableTab('overdue')}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        activeTableTab === 'overdue'
+                          ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-950'
+                      }`}
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Overdue Tasks</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300">
+                        {taskReport.overdueTasks?.length || 0}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTableTab('upcoming')}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        activeTableTab === 'upcoming'
+                          ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-950'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Upcoming Tasks</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300">
+                        {filteredUpcomingTasks.length}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTableTab('completed')}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        activeTableTab === 'completed'
+                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-950'
+                      }`}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Completed Tasks</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300">
+                        {taskReport.completedTasks?.length || 0}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Upcoming Window Selector */}
+                  {activeTableTab === 'upcoming' && (
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        Period:
+                      </span>
+                      <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-850">
+                        {[7, 14, 30].map((days) => (
+                          <button
+                            key={days}
+                            onClick={() => setUpcomingWindowDays(days)}
+                            className={`px-2 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                              upcomingWindowDays === days
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            Next {days}d
+                          </button>
+                        ))}
                       </div>
-                      <span className="truncate max-w-[150px]">{m.name}</span>
-                    </td>
-                    <td className="py-3.5 text-right font-semibold text-slate-300">{m.assignedTasks}</td>
-                    <td className="py-3.5 text-right font-semibold text-emerald-400">{m.completedTasks}</td>
-                    <td className="py-3.5 text-right font-semibold text-indigo-400">{m.openTasks}</td>
-                    <td className="py-3.5 text-right font-semibold font-mono text-slate-300">{m.hoursLogged.toFixed(1)}h</td>
-                    <td className="py-3.5 text-right font-semibold text-emerald-400">{m.issuesResolved}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </article>
-      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Table Content 1: All Tasks */}
+                {activeTableTab === 'all' && (
+                  <div className="space-y-4 animate-fade-in">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <p className="text-xs text-slate-400">
+                        Complete inventory of all project tasks. Click any row to view details.
+                      </p>
+                      <div className="relative min-w-[220px]">
+                        <input
+                          type="text"
+                          placeholder="Search tasks, code, assignee..."
+                          value={allTasksSearch}
+                          onChange={(e) => setAllTasksSearch(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
+                        />
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      </div>
+                    </div>
+
+                    {paginatedList.length > 0 ? (
+                      <div className="overflow-x-auto rounded-xl border border-slate-900">
+                        <table className="w-full text-left text-xs text-slate-300">
+                          <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-900">
+                            <tr>
+                              <th
+                                onClick={() => {
+                                  setAllTasksSortField('rawTaskNumber');
+                                  setAllTasksSortOrder(allTasksSortOrder === 'asc' ? 'desc' : 'asc');
+                                }}
+                                className="px-4 py-3.5 cursor-pointer hover:text-slate-200 transition-colors"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>Task Code</span>
+                                  <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                                </div>
+                              </th>
+                              <th
+                                onClick={() => {
+                                  setAllTasksSortField('title');
+                                  setAllTasksSortOrder(allTasksSortOrder === 'asc' ? 'desc' : 'asc');
+                                }}
+                                className="px-4 py-3.5 cursor-pointer hover:text-slate-200 transition-colors"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>Title</span>
+                                  <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                                </div>
+                              </th>
+                              <th className="px-4 py-3.5">Task List</th>
+                              <th className="px-4 py-3.5">Milestone</th>
+                              <th
+                                onClick={() => {
+                                  setAllTasksSortField('assignee');
+                                  setAllTasksSortOrder(allTasksSortOrder === 'asc' ? 'desc' : 'asc');
+                                }}
+                                className="px-4 py-3.5 cursor-pointer hover:text-slate-200 transition-colors"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>Assignee</span>
+                                  <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                                </div>
+                              </th>
+                              <th
+                                onClick={() => {
+                                  setAllTasksSortField('startDate');
+                                  setAllTasksSortOrder(allTasksSortOrder === 'asc' ? 'desc' : 'asc');
+                                }}
+                                className="px-4 py-3.5 cursor-pointer hover:text-slate-200 transition-colors"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>Start Date</span>
+                                  <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                                </div>
+                              </th>
+                              <th
+                                onClick={() => {
+                                  setAllTasksSortField('dueDate');
+                                  setAllTasksSortOrder(allTasksSortOrder === 'asc' ? 'desc' : 'asc');
+                                }}
+                                className="px-4 py-3.5 cursor-pointer hover:text-slate-200 transition-colors"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>Due Date</span>
+                                  <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                                </div>
+                              </th>
+                              <th className="px-4 py-3.5 min-w-[100px]">Progress</th>
+                              <th className="px-4 py-3.5">Priority</th>
+                              <th className="px-4 py-3.5">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-900 bg-slate-950/40">
+                            {paginatedList.map((t: any) => (
+                              <tr
+                                key={t.id}
+                                onClick={() => handleOpenTask(t.id)}
+                                className="hover:bg-slate-900/60 transition-colors cursor-pointer group"
+                              >
+                                <td className="px-4 py-3 font-mono text-indigo-400 font-bold group-hover:underline flex items-center gap-1">
+                                  {t.taskNumber}
+                                  <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </td>
+                                <td className="px-4 py-3 font-bold text-slate-200 line-clamp-1 max-w-xs">
+                                  {t.title}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.taskList || 'Default'}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.milestone || '—'}
+                                </td>
+                                <td className="px-4 py-3 text-slate-300 font-medium">
+                                  {t.assignee.name}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.startDate ? new Date(t.startDate).toLocaleDateString() : '—'}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : '—'}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full transition-all ${
+                                          t.status === 'DONE'
+                                            ? 'bg-emerald-500'
+                                            : t.status === 'IN_PROGRESS'
+                                            ? 'bg-blue-500'
+                                            : 'bg-slate-600'
+                                        }`}
+                                        style={{ width: `${t.progress ?? (t.status === 'DONE' ? 100 : 0)}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 shrink-0">
+                                      {t.progress ?? (t.status === 'DONE' ? 100 : 0)}%
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">{getPriorityBadge(t.priority)}</td>
+                                <td className="px-4 py-3">{getStatusBadge(t.status)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 bg-slate-950/40 rounded-xl border border-slate-900">
+                        <CheckSquare className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                        <p className="text-slate-400 text-xs font-semibold">
+                          No tasks found matching current filters.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Table Content 2: Overdue Tasks */}
+                {activeTableTab === 'overdue' && (
+                  <div className="space-y-4 animate-fade-in">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <p className="text-xs text-slate-400">
+                        Tasks past their due date requiring attention. Click any row to view details.
+                      </p>
+                      <div className="relative min-w-[220px]">
+                        <input
+                          type="text"
+                          placeholder="Search overdue tasks..."
+                          value={overdueSearch}
+                          onChange={(e) => setOverdueSearch(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
+                        />
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      </div>
+                    </div>
+
+                    {paginatedList.length > 0 ? (
+                      <div className="overflow-x-auto rounded-xl border border-slate-900">
+                        <table className="w-full text-left text-xs text-slate-300">
+                          <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-900">
+                            <tr>
+                              <th className="px-4 py-3.5">Task Code</th>
+                              <th className="px-4 py-3.5">Title</th>
+                              <th className="px-4 py-3.5">Task List</th>
+                              <th className="px-4 py-3.5">Milestone</th>
+                              <th className="px-4 py-3.5">Assignee</th>
+                              <th className="px-4 py-3.5">Due Date</th>
+                              <th
+                                onClick={() => {
+                                  setOverdueSortField('daysOverdue');
+                                  setOverdueSortOrder(overdueSortOrder === 'asc' ? 'desc' : 'asc');
+                                }}
+                                className="px-4 py-3.5 cursor-pointer hover:text-slate-200 transition-colors"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>Days Late</span>
+                                  <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                                </div>
+                              </th>
+                              <th className="px-4 py-3.5">Priority</th>
+                              <th className="px-4 py-3.5">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-900 bg-slate-950/40">
+                            {paginatedList.map((t: any) => (
+                              <tr
+                                key={t.id}
+                                onClick={() => handleOpenTask(t.id)}
+                                className="hover:bg-slate-900/60 transition-colors cursor-pointer group"
+                              >
+                                <td className="px-4 py-3 font-mono text-indigo-400 font-bold group-hover:underline flex items-center gap-1">
+                                  {t.taskNumber}
+                                  <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </td>
+                                <td className="px-4 py-3 font-bold text-slate-200 line-clamp-1 max-w-xs">
+                                  {t.title}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.taskList || 'Default'}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.milestone || '—'}
+                                </td>
+                                <td className="px-4 py-3 text-slate-300 font-medium">
+                                  {t.assignee.name}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : '—'}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                    {t.daysOverdue}d overdue
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">{getPriorityBadge(t.priority)}</td>
+                                <td className="px-4 py-3">{getStatusBadge(t.status)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 bg-slate-950/40 rounded-xl border border-slate-900">
+                        <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto opacity-50 mb-2" />
+                        <p className="text-slate-400 text-xs font-semibold">
+                          No overdue tasks found matching current filters.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Table Content 3: Upcoming Tasks */}
+                {activeTableTab === 'upcoming' && (
+                  <div className="space-y-4 animate-fade-in">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <p className="text-xs text-slate-400">
+                        Tasks due in the next {upcomingWindowDays} days. Click any row to view details.
+                      </p>
+                      <div className="relative min-w-[220px]">
+                        <input
+                          type="text"
+                          placeholder="Search upcoming tasks..."
+                          value={upcomingSearch}
+                          onChange={(e) => setUpcomingSearch(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
+                        />
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      </div>
+                    </div>
+
+                    {paginatedList.length > 0 ? (
+                      <div className="overflow-x-auto rounded-xl border border-slate-900">
+                        <table className="w-full text-left text-xs text-slate-300">
+                          <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-900">
+                            <tr>
+                              <th className="px-4 py-3.5">Task Code</th>
+                              <th className="px-4 py-3.5">Title</th>
+                              <th className="px-4 py-3.5">Task List</th>
+                              <th className="px-4 py-3.5">Milestone</th>
+                              <th className="px-4 py-3.5">Assignee</th>
+                              <th className="px-4 py-3.5">Start Date</th>
+                              <th className="px-4 py-3.5">Due Date</th>
+                              <th
+                                onClick={() => {
+                                  setUpcomingSortField('daysRemaining');
+                                  setUpcomingSortOrder(upcomingSortOrder === 'asc' ? 'desc' : 'asc');
+                                }}
+                                className="px-4 py-3.5 cursor-pointer hover:text-slate-200 transition-colors"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>Remaining</span>
+                                  <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                                </div>
+                              </th>
+                              <th className="px-4 py-3.5">Priority</th>
+                              <th className="px-4 py-3.5">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-900 bg-slate-950/40">
+                            {paginatedList.map((t: any) => (
+                              <tr
+                                key={t.id}
+                                onClick={() => handleOpenTask(t.id)}
+                                className="hover:bg-slate-900/60 transition-colors cursor-pointer group"
+                              >
+                                <td className="px-4 py-3 font-mono text-indigo-400 font-bold group-hover:underline flex items-center gap-1">
+                                  {t.taskNumber}
+                                  <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </td>
+                                <td className="px-4 py-3 font-bold text-slate-200 line-clamp-1 max-w-xs">
+                                  {t.title}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.taskList || 'Default'}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.milestone || '—'}
+                                </td>
+                                <td className="px-4 py-3 text-slate-300 font-medium">
+                                  {t.assignee.name}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.startDate ? new Date(t.startDate).toLocaleDateString() : '—'}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : '—'}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                    {t.daysRemaining}d remaining
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">{getPriorityBadge(t.priority)}</td>
+                                <td className="px-4 py-3">{getStatusBadge(t.status)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 bg-slate-950/40 rounded-xl border border-slate-900">
+                        <Clock className="w-8 h-8 text-amber-500 mx-auto opacity-50 mb-2" />
+                        <p className="text-slate-400 text-xs font-semibold">
+                          No upcoming tasks found in the next {upcomingWindowDays} days.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Table Content 4: Completed Tasks */}
+                {activeTableTab === 'completed' && (
+                  <div className="space-y-4 animate-fade-in">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <p className="text-xs text-slate-400">
+                        Historical archive of completed tasks. Click any row to view details.
+                      </p>
+                      <div className="relative min-w-[220px]">
+                        <input
+                          type="text"
+                          placeholder="Search completed tasks..."
+                          value={completedSearch}
+                          onChange={(e) => setCompletedSearch(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
+                        />
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      </div>
+                    </div>
+
+                    {paginatedList.length > 0 ? (
+                      <div className="overflow-x-auto rounded-xl border border-slate-900">
+                        <table className="w-full text-left text-xs text-slate-300">
+                          <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-900">
+                            <tr>
+                              <th className="px-4 py-3.5">Task Code</th>
+                              <th className="px-4 py-3.5">Title</th>
+                              <th className="px-4 py-3.5">Assignee</th>
+                              <th className="px-4 py-3.5">Task List</th>
+                              <th className="px-4 py-3.5">Milestone</th>
+                              <th
+                                onClick={() => {
+                                  setCompletedSortField('completedDate');
+                                  setCompletedSortOrder(completedSortOrder === 'asc' ? 'desc' : 'asc');
+                                }}
+                                className="px-4 py-3.5 cursor-pointer hover:text-slate-200 transition-colors"
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>Completed Date</span>
+                                  <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                                </div>
+                              </th>
+                              <th className="px-4 py-3.5">Priority</th>
+                              <th className="px-4 py-3.5">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-900 bg-slate-950/40">
+                            {paginatedList.map((t: any) => (
+                              <tr
+                                key={t.id}
+                                onClick={() => handleOpenTask(t.id)}
+                                className="hover:bg-slate-900/60 transition-colors cursor-pointer group"
+                              >
+                                <td className="px-4 py-3 font-mono text-indigo-400 font-bold group-hover:underline flex items-center gap-1">
+                                  {t.taskNumber}
+                                  <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </td>
+                                <td className="px-4 py-3 font-bold text-slate-200 line-clamp-1 max-w-xs">
+                                  {t.title}
+                                </td>
+                                <td className="px-4 py-3 text-slate-300 font-medium">
+                                  {t.assignee.name}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.taskList || 'Default'}
+                                </td>
+                                <td className="px-4 py-3 text-slate-400">
+                                  {t.milestone || '—'}
+                                </td>
+                                <td className="px-4 py-3 text-emerald-400 font-semibold">
+                                  {t.completedDate ? new Date(t.completedDate).toLocaleDateString() : '—'}
+                                </td>
+                                <td className="px-4 py-3">{getPriorityBadge(t.priority)}</td>
+                                <td className="px-4 py-3">{getStatusBadge(t.status)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 bg-slate-950/40 rounded-xl border border-slate-900">
+                        <CheckCircle2 className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                        <p className="text-slate-400 text-xs font-semibold">
+                          No completed tasks found matching current filters.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Pagination Controls Bar */}
+                {currentActiveList.length > 0 && (
+                  <div className="pt-4 border-t border-slate-900/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 text-xs text-slate-400">
+                      <span>
+                        Showing <span className="font-bold text-slate-200">{(currentPage - 1) * pageSize + 1}</span> to{' '}
+                        <span className="font-bold text-slate-200">
+                          {Math.min(currentPage * pageSize, currentActiveList.length)}
+                        </span>{' '}
+                        of <span className="font-bold text-slate-200">{currentActiveList.length}</span> entries
+                      </span>
+
+                      <div className="flex items-center gap-1.5 ml-2">
+                        <span className="text-[10px] uppercase font-bold text-slate-500">Per page:</span>
+                        <select
+                          value={pageSize}
+                          onChange={(e) => {
+                            setPageSize(Number(e.target.value));
+                            setCurrentPage(1);
+                          }}
+                          className="bg-slate-950 border border-slate-850 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                        >
+                          <option value={10}>10</option>
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Pagination Buttons */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-850 text-slate-300 hover:text-white rounded-xl text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <span>Prev</span>
+                      </button>
+
+                      <div className="flex items-center gap-1 px-2 text-xs font-bold text-slate-300">
+                        <span>Page {currentPage} of {totalPages}</span>
+                      </div>
+
+                      <button
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage >= totalPages}
+                        className="px-3 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-850 text-slate-300 hover:text-white rounded-xl text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>Next</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+        </>
+      )}
+
+      {/* Interactive Task Detail Drawer */}
+      <TaskDetailDrawer
+        taskId={selectedTaskId}
+        projectId={projectId}
+        isOpen={isTaskDrawerOpen}
+        onClose={() => {
+          setIsTaskDrawerOpen(false);
+          setSelectedTaskId(null);
+          refetch();
+        }}
+      />
     </div>
   );
 }

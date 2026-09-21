@@ -17,7 +17,9 @@ describe('AuthController (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     await app.init();
 
     prisma = app.get<PrismaService>(PrismaService);
@@ -26,7 +28,9 @@ describe('AuthController (e2e)', () => {
     try {
       await prisma.$executeRawUnsafe('SELECT 1;');
       isDatabaseOnline = true;
-      await prisma.$executeRawUnsafe('TRUNCATE TABLE users, roles, organizations CASCADE;');
+      await prisma.$executeRawUnsafe(
+        'TRUNCATE TABLE users, roles, organizations CASCADE;',
+      );
       await prisma.role.createMany({
         data: [
           { name: 'Admin' },
@@ -35,14 +39,19 @@ describe('AuthController (e2e)', () => {
         ],
       });
     } catch (e) {
-      console.warn('E2E database cleaning/seeding skipped (DB not running/accessible).', e.message);
+      console.warn(
+        'E2E database cleaning/seeding skipped (DB not running/accessible).',
+        e.message,
+      );
     }
   });
 
   afterAll(async () => {
     try {
       if (isDatabaseOnline) {
-        await prisma.$executeRawUnsafe('TRUNCATE TABLE users, roles, organizations CASCADE;');
+        await prisma.$executeRawUnsafe(
+          'TRUNCATE TABLE users, roles, organizations CASCADE;',
+        );
       }
       await prisma.$disconnect();
     } catch {

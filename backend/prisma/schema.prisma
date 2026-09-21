@@ -35,6 +35,18 @@ model Organization {
   issueComments IssueComment[]
   notifications Notification[]
   profiles      Profile[]
+  projectGroups ProjectGroup[]
+  folders       ProjectFolder[]
+  documents     ProjectDocument[]
+  roles         Role[]
+  taskLists     TaskList[]
+  taskListTemplates TaskListTemplate[]
+  taskListComments  TaskListComment[]
+  taskDependencies  TaskDependency[]
+  taskRecurrences   TaskRecurrence[]
+  taskReminders     TaskReminder[]
+  taskCustomFields  TaskCustomField[]
+  dashboards        Dashboard[]
 
   @@map("organizations")
 }
@@ -78,6 +90,7 @@ model User {
   assignedTasks       Task[]               @relation("TaskAssignee")
   reportedTasks       Task[]               @relation("TaskReporter")
   taskComments        TaskComment[]
+  taskListComments    TaskListComment[]
   taskAttachments     TaskAttachment[]
   taskWatchers        TaskWatcher[]
   taskActivities      TaskActivity[]
@@ -85,6 +98,10 @@ model User {
   timesheets          Timesheet[]
   approvedTimesheets  Timesheet[]          @relation("ApprovedTimesheets")
   projectActivities   ProjectActivity[]
+  ownedMilestones     Milestone[]          @relation("MilestoneOwner")
+  createdFolders      ProjectFolder[]      @relation("FolderCreatedBy")
+  uploadedDocuments   ProjectDocument[]    @relation("DocumentUploadedBy")
+  uploadedDocumentVersions ProjectDocumentVersion[] @relation("DocumentVersionUploadedBy")
   assignedIssues      Issue[]              @relation("IssueAssignee")
   reportedIssues      Issue[]              @relation("IssueReporter")
   issueComments       IssueComment[]
@@ -92,6 +109,12 @@ model User {
   notifications          Notification[]          @relation("UserNotifications")
   triggeredNotifications Notification[]          @relation("NotificationTriggeredBy")
   notificationPreference NotificationPreference?
+  createdTaskListTemplates TaskListTemplate[] @relation("TaskListTemplateCreator")
+  createdTaskRecurrences TaskRecurrence[] @relation("RecurrenceCreator")
+  createdReminders       TaskReminder[]   @relation("ReminderCreator")
+  receivedCustomReminders TaskReminder[]  @relation("CustomReminderUser")
+  createdDashboards       Dashboard[]     @relation("DashboardCreator")
+  dashboardShares         DashboardShare[] @relation("UserDashboardShares")
 
   @@map("users")
 }
@@ -155,6 +178,15 @@ model Role {
   id              String           @id @default(uuid())
   name            String           @unique
   description     String?
+  isSystem        Boolean          @default(false)
+  
+  parentRoleId    String?
+  parentRole      Role?            @relation("RoleHierarchy", fields: [parentRoleId], references: [id], onDelete: SetNull)
+  childRoles      Role[]           @relation("RoleHierarchy")
+  
+  organizationId  String?
+  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   userRoles       UserRole[]
@@ -245,6 +277,7 @@ enum ProjectMemberRole {
   OWNER
   MANAGER
   MEMBER
+  CLIENT
 }
 
 enum ProjectVisibility {
@@ -293,6 +326,12 @@ model Project {
   tags           String?
   isTemplate     Boolean              @default(false)
   taskLayout     TaskLayoutType       @default(STANDARD)
+  groupId           String?
+  group             ProjectGroup?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  isStrict          Boolean              @default(false)
+  workingDays       String               @default("1,2,3,4,5")
+  hoursPerDay       Float                @default(8.0)
+  allowClientAccess Boolean              @default(false)
   organizationId String
   organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   ownerId        String
@@ -306,12 +345,34 @@ model Project {
   milestones      Milestone[]
   activities      ProjectActivity[]
   issues          Issue[]
+  folders         ProjectFolder[]
+  documents       ProjectDocument[]
   notifications   Notification[]
+  taskLists       TaskList[]
+  dependencies    TaskDependency[]
+  taskRecurrences TaskRecurrence[]
+  taskCustomFields TaskCustomField[]
+  dashboards       Dashboard[]
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
   deletedAt       DateTime?
 
   @@map("projects")
+}
+
+model ProjectGroup {
+  id             String       @id @default(uuid())
+  name           String
+  description    String?
+  color          String?      @default("#6366f1")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projects       Project[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  @@map("project_groups")
 }
 
 model ProjectSettings {
@@ -321,6 +382,7 @@ model ProjectSettings {
   allowTimeTracking  Boolean  @default(true)
   allowIssueTracking Boolean  @default(true)
   allowFileUploads   Boolean  @default(true)
+  enabledTabs        String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -328,15 +390,16 @@ model ProjectSettings {
 }
 
 model ProjectMember {
-  id        String            @id @default(uuid())
-  projectId String
-  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      ProjectMemberRole @default(MEMBER)
-  addedBy   String?
-  joinedAt  DateTime          @default(now())
-  deletedAt DateTime?
+  id         String            @id @default(uuid())
+  projectId  String
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       ProjectMemberRole @default(MEMBER)
+  hourlyRate Float?
+  addedBy    String?
+  joinedAt   DateTime          @default(now())
+  deletedAt  DateTime?
 
   @@unique([projectId, userId])
   @@map("project_members")
@@ -364,6 +427,11 @@ enum TaskType {
   IMPROVEMENT
 }
 
+enum TaskBillingType {
+  BILLABLE
+  NON_BILLABLE
+}
+
 model Task {
   id             String            @id @default(uuid())
   title          String
@@ -372,9 +440,14 @@ model Task {
   status         TaskStatus        @default(TODO)
   priority       TaskPriority      @default(MEDIUM)
   type           TaskType          @default(TASK)
+  progress       Int               @default(0)
+  billingType    TaskBillingType   @default(BILLABLE)
   estimatedHours Float?
+  startDate      DateTime?
   dueDate        DateTime?
   position       Int               @default(0)
+  tags           String?
+  customFields   String?
   
   projectId      String
   project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -391,6 +464,13 @@ model Task {
   milestoneId    String?
   milestone      Milestone?        @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   
+  taskListId     String?
+  taskList       TaskList?         @relation(fields: [taskListId], references: [id], onDelete: SetNull)
+  
+  parentTaskId   String?
+  parentTask     Task?             @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks       Task[]            @relation("TaskSubtasks")
+  
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   deletedAt      DateTime?
@@ -402,14 +482,26 @@ model Task {
   labels         TaskLabelMapping[]
   timeEntries    TimeEntry[]
   issues         Issue[]
+  documents      ProjectDocument[]
   notifications  Notification[]
+  predecessorDependencies TaskDependency[] @relation("TaskSuccessorRelation")
+  successorDependencies   TaskDependency[] @relation("TaskPredecessorRelation")
+  
+  recurringTaskId String?
+  recurringTask   TaskRecurrence?   @relation("TaskToRecurrence", fields: [recurringTaskId], references: [id], onDelete: SetNull)
+  recurrenceIndex Int?
+  isRecurringTemplate Boolean       @default(false)
+  reminders       TaskReminder[]
 
   @@unique([projectId, taskNumber])
   @@index([organizationId])
   @@index([projectId])
   @@index([milestoneId])
+  @@index([taskListId])
+  @@index([parentTaskId])
   @@index([assigneeId])
   @@index([status])
+  @@index([recurringTaskId])
   @@index([deletedAt])
   @@map("tasks")
 }
@@ -569,6 +661,11 @@ model TimeEntry {
   @@map("time_entries")
 }
 
+enum MilestoneFlag {
+  INTERNAL
+  EXTERNAL
+}
+
 enum MilestoneStatus {
   PLANNED
   IN_PROGRESS
@@ -583,7 +680,11 @@ model Milestone {
   startDate      DateTime?
   dueDate        DateTime?
   status         MilestoneStatus   @default(PLANNED)
+  flag           MilestoneFlag     @default(INTERNAL)
   position       Int               @default(0)
+  
+  ownerId        String?
+  owner          User?             @relation("MilestoneOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   
   projectId      String
   project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -592,6 +693,7 @@ model Milestone {
   organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
   tasks          Task[]
+  taskLists      TaskList[]
   projectActivities ProjectActivity[]
   
   createdAt      DateTime          @default(now())
@@ -600,6 +702,88 @@ model Milestone {
 
   @@unique([projectId, title])
   @@map("milestones")
+}
+
+enum TaskListFlag {
+  INTERNAL
+  EXTERNAL
+}
+
+enum TaskListStatus {
+  ACTIVE
+  COMPLETED
+}
+
+model TaskList {
+  id             String          @id @default(uuid())
+  name           String
+  description    String?
+  flag           TaskListFlag    @default(INTERNAL)
+  status         TaskListStatus  @default(ACTIVE)
+  position       Int             @default(0)
+  
+  projectId      String
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  milestoneId    String?
+  milestone      Milestone?      @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  
+  tasks          Task[]
+  comments       TaskListComment[]
+  notifications  Notification[]
+  
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+
+  @@index([projectId])
+  @@index([organizationId])
+  @@index([milestoneId])
+  @@map("task_lists")
+}
+
+model TaskListComment {
+  id             String       @id @default(uuid())
+  taskListId     String
+  taskList       TaskList     @relation(fields: [taskListId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content        String
+  attachments    String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  @@index([taskListId])
+  @@index([organizationId])
+  @@index([deletedAt])
+  @@map("task_list_comments")
+}
+
+model TaskListTemplate {
+  id             String       @id @default(uuid())
+  name           String
+  description    String?
+  flag           TaskListFlag @default(INTERNAL)
+  tasks          Json
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdById    String
+  createdBy      User         @relation("TaskListTemplateCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  @@index([organizationId])
+  @@map("task_list_templates")
 }
 
 model ProjectActivity {
@@ -622,6 +806,89 @@ model ProjectActivity {
   createdAt      DateTime     @default(now())
 
   @@map("project_activities")
+}
+
+// ─── Document & File Management ─────────────────────────────────────────────
+
+model ProjectFolder {
+  id             String            @id @default(uuid())
+  name           String
+  description    String?
+  
+  parentId       String?
+  parentFolder   ProjectFolder?    @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  subfolders     ProjectFolder[]   @relation("FolderHierarchy")
+  
+  projectId      String
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  createdById    String
+  createdBy      User              @relation("FolderCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  
+  documents      ProjectDocument[]
+  
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
+
+  @@unique([projectId, parentId, name])
+  @@map("project_folders")
+}
+
+model ProjectDocument {
+  id             String                   @id @default(uuid())
+  name           String
+  fileUrl        String
+  fileSize       Int                      @default(0)
+  mimeType       String?
+  version        String                   @default("1.0")
+  tags           String?                  // comma-separated tags
+  
+  folderId       String?
+  folder         ProjectFolder?           @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  
+  projectId      String
+  project        Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  organizationId String
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  uploadedById   String
+  uploadedBy     User                     @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+  
+  taskId         String?
+  task           Task?                    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  
+  issueId        String?
+  issue          Issue?                   @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  
+  versions       ProjectDocumentVersion[]
+  
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  deletedAt      DateTime?
+
+  @@map("project_documents")
+}
+
+model ProjectDocumentVersion {
+  id           String          @id @default(uuid())
+  documentId   String
+  document     ProjectDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version      String
+  fileUrl      String
+  fileSize     Int             @default(0)
+  notes        String?
+  
+  uploadedById String
+  uploadedBy   User            @relation("DocumentVersionUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+  
+  createdAt    DateTime        @default(now())
+
+  @@map("project_document_versions")
 }
 
 // ─── Phase 8: Issue / Bug Tracking ───────────────────────────────────────────
@@ -689,6 +956,7 @@ model Issue {
 
   comments    IssueComment[]
   activities  IssueActivity[]
+  documents   ProjectDocument[]
   notifications Notification[]
 
   createdAt   DateTime      @default(now())
@@ -739,7 +1007,19 @@ model IssueActivity {
 
 enum NotificationType {
   TASK_ASSIGNMENT
+  TASK_UNASSIGNED
+  TASK_STATUS_CHANGED
+  TASK_PRIORITY_CHANGED
+  TASK_DUE_DATE_CHANGED
   TASK_COMMENT
+  TASK_MENTION
+  TASK_ATTACHMENT
+  TASK_COMPLETED
+  TASK_REOPENED
+  TASK_DEPENDENCY_COMPLETED
+  TASK_REMINDER_DUE
+  TASK_REMINDER_OVERDUE
+  TASK_LIST_COMMENT
   ISSUE_ASSIGNMENT
   ISSUE_COMMENT
   ISSUE_RESOLVED
@@ -748,6 +1028,7 @@ enum NotificationType {
   TIMESHEET_APPROVED
   TIMESHEET_REJECTED
   SYSTEM
+  RECURRING_TASK_GENERATED
 }
 
 model Notification {
@@ -778,6 +1059,9 @@ model Notification {
   issueId        String?
   issue          Issue?           @relation(fields: [issueId], references: [id], onDelete: Cascade)
   
+  taskListId     String?
+  taskList       TaskList?        @relation(fields: [taskListId], references: [id], onDelete: Cascade)
+  
   organizationId String
   organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
@@ -791,6 +1075,7 @@ model Notification {
   @@index([projectId])
   @@index([taskId])
   @@index([issueId])
+  @@index([taskListId])
   @@index([createdAt])
   @@index([deletedAt])
   @@map("notifications")
@@ -803,8 +1088,18 @@ model NotificationPreference {
   user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   taskAssignment     Boolean  @default(true)
+  taskStatusChange   Boolean  @default(true)
+  taskPriorityChange Boolean  @default(true)
+  taskDueDateChange  Boolean  @default(true)
   taskComment        Boolean  @default(true)
-  
+  taskMention        Boolean  @default(true)
+  taskAttachment     Boolean  @default(true)
+  taskReminder       Boolean  @default(true)
+  taskOverdue        Boolean  @default(true)
+  taskDependency     Boolean  @default(true)
+  recurringTask      Boolean  @default(true)
+  taskListComment    Boolean  @default(true)
+
   issueAssignment    Boolean  @default(true)
   issueComment       Boolean  @default(true)
   
@@ -813,9 +1108,376 @@ model NotificationPreference {
   timesheetSubmitted Boolean  @default(true)
   timesheetApproved  Boolean  @default(true)
   timesheetRejected  Boolean  @default(true)
+
+  emailNotifications Boolean  @default(true)
+  inAppNotifications Boolean  @default(true)
   
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@map("notification_preferences")
+}
+
+// ─── Phase 15: Task Reminders ────────────────────────────────────────────────
+
+enum ReminderType {
+  BEFORE_DUE
+  ON_DUE
+  AFTER_DUE
+  CUSTOM_DATE
+}
+
+enum ReminderRecipientType {
+  ASSIGNEE
+  REPORTER
+  WATCHERS
+  CUSTOM_USER
+  ALL_STAKEHOLDERS
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  DISMISSED
+  CANCELLED
+}
+
+model TaskReminder {
+  id                   String                @id @default(uuid())
+  taskId               String
+  task                 Task                  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  organizationId       String
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  type                 ReminderType          @default(BEFORE_DUE)
+  offsetMinutes        Int?                  // e.g. 15, 60, 1440 (1 day), 2880 (2 days)
+  timeOfDay            String?               // e.g. "09:00" for ON_DUE / OVERDUE
+  customDate           DateTime?             // for CUSTOM_DATE
+  
+  remindAt             DateTime              // Calculated scheduled trigger timestamp (UTC)
+  
+  recipientType        ReminderRecipientType @default(ASSIGNEE)
+  recipientId          String?
+  recipient            User?                 @relation("CustomReminderUser", fields: [recipientId], references: [id], onDelete: SetNull)
+  
+  repeatDailyIfOverdue Boolean               @default(false)
+  status               ReminderStatus        @default(PENDING)
+  lastSentAt           DateTime?
+  
+  createdById          String?
+  createdBy            User?                 @relation("ReminderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  deletedAt            DateTime?
+
+  @@index([organizationId])
+  @@index([taskId])
+  @@index([status])
+  @@index([remindAt])
+  @@index([deletedAt])
+  @@map("task_reminders")
+}
+
+// ─── Phase 13: Task Dependencies ─────────────────────────────────────────────
+
+enum DependencyType {
+  FINISH_TO_START
+  START_TO_START
+  FINISH_TO_FINISH
+  START_TO_FINISH
+}
+
+enum DependencyLinkType {
+  HARD
+  SOFT
+}
+
+model TaskDependency {
+  id              String             @id @default(uuid())
+  organizationId  String
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  projectId       String
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  predecessorId   String
+  predecessor     Task               @relation("TaskPredecessorRelation", fields: [predecessorId], references: [id], onDelete: Cascade)
+  
+  successorId     String
+  successor       Task               @relation("TaskSuccessorRelation", fields: [successorId], references: [id], onDelete: Cascade)
+  
+  type            DependencyType     @default(FINISH_TO_START)
+  lag             Int                @default(0) // Lag in working days (+N for lag, -N for lead)
+  linkType        DependencyLinkType @default(HARD)
+  
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([predecessorId, successorId])
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([predecessorId])
+  @@index([successorId])
+  @@map("task_dependencies")
+}
+
+// ─── Phase 14: Recurring Tasks System ────────────────────────────────────────
+
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum RecurrenceEndType {
+  NEVER
+  ON_DATE
+  AFTER_OCCURRENCES
+}
+
+enum RecurrenceNonWorkingDayAction {
+  EXACT_DATE
+  NEXT_WORKING_DAY
+  PREVIOUS_WORKING_DAY
+}
+
+enum RecurrenceStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  STOPPED
+}
+
+model TaskRecurrence {
+  id                  String                        @id @default(uuid())
+  organizationId      String
+  organization        Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId           String
+  project             Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Origin task that initiated the recurrence
+  originalTaskId      String?
+  
+  frequency           RecurrenceFrequency           @default(WEEKLY)
+  interval            Int                           @default(1) // Every N days/weeks/months/years
+  
+  // Weekly options: comma-separated day numbers (1=Mon..7=Sun or 0=Sun..6=Sat), e.g. "1,3,5"
+  daysOfWeek          String?
+  
+  // Monthly options: day of month (1-31, or -1 for last day)
+  dayOfMonth          Int?
+  
+  // Monthly relative options: weekOfMonth (1=1st, 2=2nd, 3=3rd, 4=4th, -1=last), relativeDayOfWeek (1=Mon..7=Sun)
+  weekOfMonth         Int?
+  relativeDayOfWeek   Int?
+  
+  // Yearly options: monthOfYear (1-12)
+  monthOfYear         Int?
+  
+  // Non-working days handling based on project workingDays
+  nonWorkingDayAction RecurrenceNonWorkingDayAction @default(NEXT_WORKING_DAY)
+  
+  // Recurrence range & bounds
+  startDate           DateTime
+  endType             RecurrenceEndType             @default(NEVER)
+  endDate             DateTime?
+  maxOccurrences      Int?
+  
+  // Execution tracking & idempotency
+  status              RecurrenceStatus              @default(ACTIVE)
+  occurrencesCount    Int                           @default(0)
+  lastGeneratedDate   DateTime?
+  nextRunDate         DateTime?
+  
+  // Task template snapshot (persists configuration if original task changes independently)
+  taskTemplate        String?                       // Stringified JSON
+  cloneSubtasks       Boolean                       @default(true)
+  cloneAttachments    Boolean                       @default(false)
+  
+  // Creator
+  createdById         String?
+  createdBy           User?                         @relation("RecurrenceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  
+  // Generated task instances
+  tasks               Task[]                        @relation("TaskToRecurrence")
+  
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+  deletedAt           DateTime?
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([status])
+  @@index([nextRunDate])
+  @@index([deletedAt])
+  @@map("task_recurrences")
+}
+
+// ─── Task Custom Fields System ───────────────────────────────────────────────
+
+enum CustomFieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  DECIMAL
+  CURRENCY
+  PERCENTAGE
+  DATE
+  DATETIME
+  CHECKBOX
+  SELECT
+  MULTI_SELECT
+  USER
+  URL
+  EMAIL
+  PHONE
+}
+
+model TaskCustomField {
+  id             String          @id @default(uuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  projectId      String?
+  project        Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  name           String          // Display label, e.g. "Release Version"
+  apiName        String          // API/Internal identifier, e.g. "cf_release_version"
+  type           CustomFieldType @default(TEXT)
+  
+  description    String?         // Help text/description for users
+  placeholder    String?         // Placeholder text in input
+  defaultValue   String?         // Stringified default value
+  
+  isRequired     Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  showInList     Boolean         @default(true)
+  showInKanban   Boolean         @default(false)
+  showInGantt    Boolean         @default(false)
+  
+  options        String?         // JSON array of options for SELECT / MULTI_SELECT: [{ label, value, color }]
+  validation     String?         // JSON object for validation: { minLength, maxLength, minValue, maxValue, minDate, maxDate, regex, regexMessage, decimalPlaces, currencyCode }
+  
+  position       Int             @default(0)
+  section        String?         @default("General") // Form section grouping
+  
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+
+  @@unique([organizationId, projectId, apiName])
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@map("task_custom_fields")
+}
+
+// ─── Custom Dashboards System ────────────────────────────────────────────────
+
+enum DashboardVisibility {
+  PRIVATE
+  PROJECT_USERS
+  PORTAL_USERS
+  CUSTOM
+}
+
+enum DashboardAccessLevel {
+  VIEWER
+  EDITOR
+  FULL_ACCESS
+}
+
+enum WidgetType {
+  KPI_TOTAL_TASKS
+  KPI_COMPLETED_TASKS
+  KPI_PENDING_TASKS
+  KPI_OVERDUE_TASKS
+  KPI_TOTAL_MILESTONES
+  KPI_COMPLETED_MILESTONES
+  KPI_LOGGED_HOURS
+  KPI_BILLABLE_HOURS
+  KPI_NON_BILLABLE_HOURS
+  KPI_PROJECT_PROGRESS
+  CHART_TASK_STATUS
+  CHART_TASK_PRIORITY
+  CHART_TASK_ASSIGNEE
+  CHART_TASK_LIST
+  CHART_TASK_MILESTONE
+  CHART_TASK_COMPLETION_TREND
+  CHART_HOURS_LOGGED
+  CHART_BILLABLE_VS_NON_BILLABLE
+  TABLE_OVERDUE_TASKS
+  TABLE_UPCOMING_TASKS
+  TABLE_RECENT_TASKS
+  TABLE_RECENT_TIME_LOGS
+}
+
+model Dashboard {
+  id             String              @id @default(uuid())
+  name           String
+  description    String?
+  isDefault      Boolean             @default(false)
+  visibility     DashboardVisibility @default(PRIVATE)
+  layout         String?             // JSON string storing canvas grid & widget layout options
+  
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  projectId      String?             // Null for cross-project / portal-wide dashboards
+  project        Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  createdById    String
+  createdBy      User                @relation("DashboardCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  
+  widgets        DashboardWidget[]
+  shares         DashboardShare[]
+  
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  deletedAt      DateTime?
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([createdById])
+  @@index([deletedAt])
+  @@map("dashboards")
+}
+
+model DashboardWidget {
+  id          String     @id @default(uuid())
+  dashboardId String
+  dashboard   Dashboard  @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  
+  title       String
+  type        WidgetType
+  position    Int        @default(0)
+  width       String     @default("HALF") // "FULL" (12-col), "HALF" (6-col), "THIRD" (4-col), "QUARTER" (3-col)
+  config      String?    // JSON string for widget-level filters: { projectId, dateRange, status, priority, assigneeId, taskListId, milestoneId, chartType, limit }
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([dashboardId])
+  @@map("dashboard_widgets")
+}
+
+model DashboardShare {
+  id          String               @id @default(uuid())
+  dashboardId String
+  dashboard   Dashboard            @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User                 @relation("UserDashboardShares", fields: [userId], references: [id], onDelete: Cascade)
+  
+  accessLevel DashboardAccessLevel @default(VIEWER)
+  createdAt   DateTime             @default(now())
+
+  @@unique([dashboardId, userId])
+  @@index([dashboardId])
+  @@index([userId])
+  @@map("dashboard_shares")
 }

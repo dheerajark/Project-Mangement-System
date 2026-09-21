@@ -7,7 +7,47 @@ export class UpdatePreferencesDto {
 
   @IsBoolean()
   @IsOptional()
+  taskStatusChange?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  taskPriorityChange?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  taskDueDateChange?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
   taskComment?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  taskMention?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  taskAttachment?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  taskReminder?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  taskOverdue?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  taskDependency?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  recurringTask?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  taskListComment?: boolean;
 
   @IsBoolean()
   @IsOptional()
@@ -32,4 +72,12 @@ export class UpdatePreferencesDto {
   @IsBoolean()
   @IsOptional()
   timesheetRejected?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  emailNotifications?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  inAppNotifications?: boolean;
 }

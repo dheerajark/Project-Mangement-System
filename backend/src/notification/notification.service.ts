@@ -14,25 +14,48 @@ export class NotificationService {
 
   private isNotificationEnabled(type: NotificationType, pref: any): boolean {
     if (!pref) return true; // Default to true if preferences are not configured yet
+    if (pref.inAppNotifications === false) return false;
     switch (type) {
       case NotificationType.TASK_ASSIGNMENT:
-        return pref.taskAssignment;
+      case NotificationType.TASK_UNASSIGNED:
+        return pref.taskAssignment ?? true;
+      case NotificationType.TASK_STATUS_CHANGED:
+      case NotificationType.TASK_COMPLETED:
+      case NotificationType.TASK_REOPENED:
+        return pref.taskStatusChange ?? true;
+      case NotificationType.TASK_PRIORITY_CHANGED:
+        return pref.taskPriorityChange ?? true;
+      case NotificationType.TASK_DUE_DATE_CHANGED:
+        return pref.taskDueDateChange ?? true;
       case NotificationType.TASK_COMMENT:
-        return pref.taskComment;
+        return pref.taskComment ?? true;
+      case NotificationType.TASK_MENTION:
+        return pref.taskMention ?? true;
+      case NotificationType.TASK_ATTACHMENT:
+        return pref.taskAttachment ?? true;
+      case NotificationType.TASK_REMINDER_DUE:
+        return pref.taskReminder ?? true;
+      case NotificationType.TASK_REMINDER_OVERDUE:
+        return pref.taskOverdue ?? true;
+      case NotificationType.TASK_DEPENDENCY_COMPLETED:
+        return pref.taskDependency ?? true;
+      case NotificationType.RECURRING_TASK_GENERATED:
+        return pref.recurringTask ?? true;
+      case NotificationType.TASK_LIST_COMMENT:
+        return pref.taskListComment ?? true;
       case NotificationType.ISSUE_ASSIGNMENT:
-        return pref.issueAssignment;
-      case NotificationType.ISSUE_COMMENT:
-        return pref.issueComment;
       case NotificationType.ISSUE_RESOLVED:
-        return pref.issueAssignment; // Map issue resolution to issue settings
+        return pref.issueAssignment ?? true;
+      case NotificationType.ISSUE_COMMENT:
+        return pref.issueComment ?? true;
       case NotificationType.MILESTONE_UPDATE:
-        return pref.milestoneUpdate;
+        return pref.milestoneUpdate ?? true;
       case NotificationType.TIMESHEET_SUBMITTED:
-        return pref.timesheetSubmitted;
+        return pref.timesheetSubmitted ?? true;
       case NotificationType.TIMESHEET_APPROVED:
-        return pref.timesheetApproved;
+        return pref.timesheetApproved ?? true;
       case NotificationType.TIMESHEET_REJECTED:
-        return pref.timesheetRejected;
+        return pref.timesheetRejected ?? true;
       case NotificationType.SYSTEM:
         return true;
       default:
@@ -64,6 +87,7 @@ export class NotificationService {
         projectId: dto.projectId,
         taskId: dto.taskId,
         issueId: dto.issueId,
+        taskListId: dto.taskListId,
         organizationId: dto.organizationId,
       },
       include: {
@@ -118,6 +142,7 @@ export class NotificationService {
             projectId: dto.projectId,
             taskId: dto.taskId,
             issueId: dto.issueId,
+            taskListId: dto.taskListId,
             organizationId: dto.organizationId,
           },
           include: {
@@ -203,7 +228,11 @@ export class NotificationService {
     });
   }
 
-  async archiveNotification(notificationId: string, userId: string, orgId: string) {
+  async archiveNotification(
+    notificationId: string,
+    userId: string,
+    orgId: string,
+  ) {
     const notification = await this.prisma.notification.findFirst({
       where: {
         id: notificationId,
@@ -240,7 +269,11 @@ export class NotificationService {
     return preference;
   }
 
-  async updatePreferences(userId: string, orgId: string, dto: UpdatePreferencesDto) {
+  async updatePreferences(
+    userId: string,
+    orgId: string,
+    dto: UpdatePreferencesDto,
+  ) {
     return this.prisma.notificationPreference.upsert({
       where: { userId },
       update: dto,

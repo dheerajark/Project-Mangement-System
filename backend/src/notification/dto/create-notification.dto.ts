@@ -1,4 +1,10 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { NotificationType } from '@prisma/client';
 
 export class CreateNotificationDto {
@@ -40,6 +46,10 @@ export class CreateNotificationDto {
   @IsUUID()
   @IsOptional()
   issueId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  taskListId?: string;
 
   @IsUUID()
   @IsNotEmpty()

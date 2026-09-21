@@ -50,13 +50,25 @@ function PersonalSettingsContent() {
   // Notification Preferences States
   const [notifState, setNotifState] = useState({
     taskAssignment: true,
+    taskStatusChange: true,
+    taskPriorityChange: true,
+    taskDueDateChange: true,
     taskComment: true,
+    taskMention: true,
+    taskAttachment: true,
+    taskReminder: true,
+    taskOverdue: true,
+    taskDependency: true,
+    recurringTask: true,
+    taskListComment: true,
     issueAssignment: true,
     issueComment: true,
     milestoneUpdate: true,
     timesheetSubmitted: true,
     timesheetApproved: true,
     timesheetRejected: true,
+    emailNotifications: true,
+    inAppNotifications: true,
   });
   const [notifSuccessToast, setNotifSuccessToast] = useState(false);
   const [notifErrorMsg, setNotifErrorMsg] = useState<string | null>(null);
@@ -93,13 +105,25 @@ function PersonalSettingsContent() {
     if (notifData) {
       setNotifState({
         taskAssignment: notifData.taskAssignment ?? true,
+        taskStatusChange: notifData.taskStatusChange ?? true,
+        taskPriorityChange: notifData.taskPriorityChange ?? true,
+        taskDueDateChange: notifData.taskDueDateChange ?? true,
         taskComment: notifData.taskComment ?? true,
+        taskMention: notifData.taskMention ?? true,
+        taskAttachment: notifData.taskAttachment ?? true,
+        taskReminder: notifData.taskReminder ?? true,
+        taskOverdue: notifData.taskOverdue ?? true,
+        taskDependency: notifData.taskDependency ?? true,
+        recurringTask: notifData.recurringTask ?? true,
+        taskListComment: notifData.taskListComment ?? true,
         issueAssignment: notifData.issueAssignment ?? true,
         issueComment: notifData.issueComment ?? true,
         milestoneUpdate: notifData.milestoneUpdate ?? true,
         timesheetSubmitted: notifData.timesheetSubmitted ?? true,
         timesheetApproved: notifData.timesheetApproved ?? true,
         timesheetRejected: notifData.timesheetRejected ?? true,
+        emailNotifications: notifData.emailNotifications ?? true,
+        inAppNotifications: notifData.inAppNotifications ?? true,
       });
     }
   }, [notifData]);
@@ -429,14 +453,89 @@ function PersonalSettingsContent() {
                   </div>
                 ) : (
                   <div className="space-y-6 divide-y divide-border/60">
-                    {/* TASKS */}
+                    {/* DELIVERY CHANNELS */}
                     <div className="pt-2 space-y-4">
-                      <h4 className="text-xs font-bold text-rose-500/90 tracking-wider uppercase">Tasks</h4>
+                      <h4 className="text-xs font-bold text-rose-500/90 tracking-wider uppercase">Delivery Channels</h4>
                       
                       <div className="flex items-center justify-between py-2">
                         <div>
-                          <label className="text-sm font-semibold text-foreground block">Task Assignment</label>
-                          <span className="text-xs text-muted-foreground">Receive alerts when tasks are assigned to you</span>
+                          <label className="text-sm font-semibold text-foreground block">In-App Notifications & Toasts</label>
+                          <span className="text-xs text-muted-foreground">Receive real-time alerts, toast banners, and bell notifications in the app</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.inAppNotifications}
+                          onChange={(e) => setNotifState({ ...notifState, inAppNotifications: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between py-2 border-t border-border/40">
+                        <div>
+                          <label className="text-sm font-semibold text-foreground block">Email Notifications</label>
+                          <span className="text-xs text-muted-foreground">Receive summary emails for critical task reminders and assignments</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.emailNotifications}
+                          onChange={(e) => setNotifState({ ...notifState, emailNotifications: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+                    </div>
+
+                    {/* TASK REMINDERS & ALERTS */}
+                    <div className="pt-6 space-y-4">
+                      <h4 className="text-xs font-bold text-rose-500/90 tracking-wider uppercase">Task Reminders & Alerts</h4>
+
+                      <div className="flex items-center justify-between py-2">
+                        <div>
+                          <label className="text-sm font-semibold text-foreground block">Due Date Reminders</label>
+                          <span className="text-xs text-muted-foreground">Receive reminders approaching task due dates (e.g. 1 day before, on due date)</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.taskReminder}
+                          onChange={(e) => setNotifState({ ...notifState, taskReminder: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between py-2 border-t border-border/40">
+                        <div>
+                          <label className="text-sm font-semibold text-foreground block">Overdue Task Warnings</label>
+                          <span className="text-xs text-muted-foreground">Receive daily or scheduled warnings when assigned tasks are overdue</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.taskOverdue}
+                          onChange={(e) => setNotifState({ ...notifState, taskOverdue: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between py-2 border-t border-border/40">
+                        <div>
+                          <label className="text-sm font-semibold text-foreground block">Recurring Task Generations</label>
+                          <span className="text-xs text-muted-foreground">Receive alerts when new task occurrences are spawned from recurring schedules</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.recurringTask}
+                          onChange={(e) => setNotifState({ ...notifState, recurringTask: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+                    </div>
+
+                    {/* TASKS & COLLABORATION */}
+                    <div className="pt-6 space-y-4">
+                      <h4 className="text-xs font-bold text-rose-500/90 tracking-wider uppercase">Tasks & Collaboration</h4>
+                      
+                      <div className="flex items-center justify-between py-2">
+                        <div>
+                          <label className="text-sm font-semibold text-foreground block">Task Assignment & Reassignment</label>
+                          <span className="text-xs text-muted-foreground">Receive alerts when tasks are assigned or unassigned to/from you</span>
                         </div>
                         <input
                           type="checkbox"
@@ -448,13 +547,104 @@ function PersonalSettingsContent() {
 
                       <div className="flex items-center justify-between py-2 border-t border-border/40">
                         <div>
+                          <label className="text-sm font-semibold text-foreground block">Status & Completion Changes</label>
+                          <span className="text-xs text-muted-foreground">Receive alerts when tasks you watch or own change status, complete, or reopen</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.taskStatusChange}
+                          onChange={(e) => setNotifState({ ...notifState, taskStatusChange: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between py-2 border-t border-border/40">
+                        <div>
+                          <label className="text-sm font-semibold text-foreground block">Priority Changes</label>
+                          <span className="text-xs text-muted-foreground">Receive alerts when a task priority is updated (e.g. escalated to High/Critical)</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.taskPriorityChange}
+                          onChange={(e) => setNotifState({ ...notifState, taskPriorityChange: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between py-2 border-t border-border/40">
+                        <div>
+                          <label className="text-sm font-semibold text-foreground block">Schedule & Due Date Changes</label>
+                          <span className="text-xs text-muted-foreground">Receive alerts when task start or due dates are adjusted</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.taskDueDateChange}
+                          onChange={(e) => setNotifState({ ...notifState, taskDueDateChange: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between py-2 border-t border-border/40">
+                        <div>
+                          <label className="text-sm font-semibold text-foreground block">Direct @Mentions</label>
+                          <span className="text-xs text-muted-foreground">Receive priority alerts when someone mentions you with @username</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.taskMention}
+                          onChange={(e) => setNotifState({ ...notifState, taskMention: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between py-2 border-t border-border/40">
+                        <div>
                           <label className="text-sm font-semibold text-foreground block">Task Comments</label>
-                          <span className="text-xs text-muted-foreground">Receive alerts when someone comments on your tasks</span>
+                          <span className="text-xs text-muted-foreground">Receive alerts when someone comments on tasks you own or watch</span>
                         </div>
                         <input
                           type="checkbox"
                           checked={notifState.taskComment}
                           onChange={(e) => setNotifState({ ...notifState, taskComment: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between py-2 border-t border-border/40">
+                        <div>
+                          <label className="text-sm font-semibold text-foreground block">Task Attachments</label>
+                          <span className="text-xs text-muted-foreground">Receive alerts when documents or files are uploaded to your tasks</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.taskAttachment}
+                          onChange={(e) => setNotifState({ ...notifState, taskAttachment: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between py-2 border-t border-border/40">
+                        <div>
+                          <label className="text-sm font-semibold text-foreground block">Task Dependencies</label>
+                          <span className="text-xs text-muted-foreground">Receive alerts when predecessor tasks are marked complete so you can start</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.taskDependency}
+                          onChange={(e) => setNotifState({ ...notifState, taskDependency: e.target.checked })}
+                          className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between py-2 border-t border-border/40">
+                        <div>
+                          <label className="text-sm font-semibold text-foreground block">Task List Comments</label>
+                          <span className="text-xs text-muted-foreground">Receive alerts when someone comments on task lists in your projects</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={notifState.taskListComment}
+                          onChange={(e) => setNotifState({ ...notifState, taskListComment: e.target.checked })}
                           className="w-10 h-5 bg-muted/80 border border-border rounded-full appearance-none checked:bg-primary checked:before:translate-x-5 before:content-[''] before:block before:w-4 before:h-4 before:bg-white before:rounded-full before:transition-transform before:translate-x-0.5 before:translate-y-0.5 cursor-pointer shadow-xs transition-colors flex-shrink-0"
                         />
                       </div>

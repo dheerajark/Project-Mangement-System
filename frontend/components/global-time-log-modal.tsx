@@ -111,10 +111,10 @@ export default function GlobalTimeLogModal({ isOpen, onClose, onSuccess }: Globa
   const selectedProjectObj = activeProjects.find((p: any) => p.id === selectedProjectId);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex justify-end overflow-hidden animate-in fade-in duration-200">
       <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} />
       
-      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-slate-100 p-6 space-y-4">
+      <div className="relative w-full max-w-xl bg-slate-900 border-l border-slate-800 shadow-2xl overflow-hidden text-slate-100 p-6 space-y-4 h-full flex flex-col animate-in slide-in-from-right duration-300">
         <header className="flex justify-between items-center border-b border-slate-800 pb-3">
           <h4 className="font-bold text-sm text-slate-100 flex items-center gap-2">
             <Clock className="w-4 h-4 text-indigo-400" />

@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -38,7 +43,10 @@ export class PermissionsGuard implements CanActivate {
       const currentVersion = dbUserProfile.profile.version;
       const currentProfileId = dbUserProfile.profileId;
 
-      if (currentProfileId !== user.profileId || currentVersion !== user.profileVersion) {
+      if (
+        currentProfileId !== user.profileId ||
+        currentVersion !== user.profileVersion
+      ) {
         throw new UnauthorizedException('OUTDATED_TOKEN');
       }
     } else if (user.profileId) {

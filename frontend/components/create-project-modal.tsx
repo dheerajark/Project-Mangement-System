@@ -11,27 +11,31 @@ import {
   Lock,
   Globe,
   DollarSign,
-  Clock,
   Tag,
   Copy,
   ChevronDown,
   ChevronUp,
-  LayoutGrid,
-  CheckSquare,
   ShieldAlert,
-  Sliders,
-  Sparkles,
   Layers,
+  FolderPlus,
+  UserCheck,
+  Calendar,
+  Briefcase,
+  AlertTriangle,
+  Save,
 } from 'lucide-react';
 
 interface CreateProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
+  project?: any;
 }
 
-export default function CreateProjectModal({ isOpen, onClose }: CreateProjectModalProps) {
+export default function CreateProjectModal({ isOpen, onClose, project }: CreateProjectModalProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+
+  const isEditMode = !!project;
 
   // Form States
   const [name, setName] = useState('');
@@ -41,11 +45,22 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
   const [visibility, setVisibility] = useState<'PRIVATE' | 'ORGANIZATION'>('PRIVATE');
   const [isTemplate, setIsTemplate] = useState(false);
 
+  // Group & Owner
+  const [groupId, setGroupId] = useState('');
+  const [ownerId, setOwnerId] = useState('');
+  const [isStrict, setIsStrict] = useState(false);
+
+  // Quick Group Creation Modal State
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupColor, setNewGroupColor] = useState('#6366f1');
+
   // Template / Baseline Cloning State
   const [templateProjectId, setTemplateProjectId] = useState<string>('');
   const [copyMilestones, setCopyMilestones] = useState(true);
   const [copyTasks, setCopyTasks] = useState(true);
   const [copyMembers, setCopyMembers] = useState(false);
+  const [shiftDates, setShiftDates] = useState(true);
 
   // Layout & Tags
   const [taskLayout, setTaskLayout] = useState<'STANDARD' | 'KANBAN' | 'LIST' | 'GANTT'>('STANDARD');
@@ -59,58 +74,155 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
   const [billingMethod, setBillingMethod] = useState<'NONE' | 'FIXED_RATE' | 'PROJECT_HOURLY_RATE' | 'STAFF_HOURLY_RATE' | 'TASK_HOURLY_RATE'>('NONE');
   const [billingRate, setBillingRate] = useState<string>('');
 
-  const [isBudgetOpen, setIsBudgetOpen] = useState(true);
+  // Work Schedule & Client Portal Access
+  const [workingDays, setWorkingDays] = useState('1,2,3,4,5');
+  const [hoursPerDay, setHoursPerDay] = useState('8.0');
+  const [allowClientAccess, setAllowClientAccess] = useState(false);
+
+  const [isBudgetOpen, setIsBudgetOpen] = useState(false);
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Reset form when modal opens/closes
+  // Populate or reset form when modal opens/closes
   useEffect(() => {
-    if (!isOpen) {
-      setName('');
-      setDescription('');
-      setStartDate('');
-      setEndDate('');
-      setVisibility('PRIVATE');
-      setIsTemplate(false);
-      setTemplateProjectId('');
-      setCopyMilestones(true);
-      setCopyTasks(true);
-      setCopyMembers(false);
-      setTaskLayout('STANDARD');
-      setTags('');
-      setCurrency('USD');
-      setBudgetType('NONE');
-      setBudgetAmount('');
-      setBudgetHours('');
-      setBillingMethod('NONE');
-      setBillingRate('');
-      setErrorMessage(null);
+    if (isOpen) {
+      if (project) {
+        setName(project.name || '');
+        setDescription(project.description || '');
+        setStartDate(project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '');
+        setEndDate(project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '');
+        setVisibility(project.visibility || 'PRIVATE');
+        setIsTemplate(project.isTemplate || false);
+        setGroupId(project.groupId || '');
+        setOwnerId(project.ownerId || '');
+        setIsStrict(project.isStrict || false);
+        setTaskLayout(project.taskLayout || 'STANDARD');
+        setTags(project.tags || '');
+        setCurrency(project.currency || 'USD');
+        setBudgetType(project.budgetType || 'NONE');
+        setBudgetAmount(project.budgetAmount !== null && project.budgetAmount !== undefined ? String(project.budgetAmount) : '');
+        setBudgetHours(project.budgetHours !== null && project.budgetHours !== undefined ? String(project.budgetHours) : '');
+        setBillingMethod(project.billingMethod || 'NONE');
+        setBillingRate(project.billingRate !== null && project.billingRate !== undefined ? String(project.billingRate) : '');
+        setWorkingDays(project.workingDays || '1,2,3,4,5');
+        setHoursPerDay(project.hoursPerDay !== null && project.hoursPerDay !== undefined ? String(project.hoursPerDay) : '8.0');
+        setAllowClientAccess(project.allowClientAccess || false);
+        if (project.budgetType !== 'NONE') setIsBudgetOpen(true);
+        if (project.workingDays || project.allowClientAccess) setIsScheduleOpen(true);
+      } else {
+        setName('');
+        setDescription('');
+        setStartDate('');
+        setEndDate('');
+        setVisibility('PRIVATE');
+        setIsTemplate(false);
+        setGroupId('');
+        setOwnerId('');
+        setIsStrict(false);
+        setTemplateProjectId('');
+        setCopyMilestones(true);
+        setCopyTasks(true);
+        setCopyMembers(false);
+        setShiftDates(true);
+        setTaskLayout('STANDARD');
+        setTags('');
+        setCurrency('USD');
+        setBudgetType('NONE');
+        setBudgetAmount('');
+        setBudgetHours('');
+        setBillingMethod('NONE');
+        setBillingRate('');
+        setWorkingDays('1,2,3,4,5');
+        setHoursPerDay('8.0');
+        setAllowClientAccess(false);
+        setIsBudgetOpen(false);
+        setIsScheduleOpen(false);
+        setIsCreatingGroup(false);
+        setErrorMessage(null);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, project]);
 
-  // Fetch baseline projects/templates for cloning dropdown
+  // Fetch available projects / templates for cloning
   const { data: availableProjects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
       const res = await api.get('/projects');
       return res.data;
     },
+    enabled: isOpen && !isEditMode,
+  });
+
+  // Fetch project groups
+  const { data: projectGroups = [] } = useQuery({
+    queryKey: ['project-groups'],
+    queryFn: async () => {
+      const res = await api.get('/project-groups');
+      return res.data;
+    },
     enabled: isOpen,
   });
 
-  const createProjectMutation = useMutation({
-    mutationFn: async (payload: any) => {
-      const res = await api.post('/projects', payload);
+  // Fetch organization members for Project Owner selection
+  const { data: orgMembers = [] } = useQuery({
+    queryKey: ['orgMembers'],
+    queryFn: async () => {
+      const res = await api.get('/organization/members');
       return res.data;
     },
-    onSuccess: (newProj) => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      onClose();
-      router.push(`/projects/${newProj.id}`);
+    enabled: isOpen,
+  });
+
+  // Create Project Group Mutation
+  const createGroupMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await api.post('/project-groups', payload);
+      return res.data;
+    },
+    onSuccess: (newGroup) => {
+      queryClient.invalidateQueries({ queryKey: ['project-groups'] });
+      setGroupId(newGroup.id);
+      setIsCreatingGroup(false);
+      setNewGroupName('');
     },
     onError: (err: any) => {
-      setErrorMessage(err.response?.data?.message || 'Failed to create project');
+      setErrorMessage(err.response?.data?.message || 'Failed to create project group');
     },
   });
+
+  const saveProjectMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      if (isEditMode) {
+        const res = await api.patch(`/projects/${project.id}`, payload);
+        return res.data;
+      } else {
+        const res = await api.post('/projects', payload);
+        return res.data;
+      }
+    },
+    onSuccess: (savedProj) => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      if (isEditMode) {
+        queryClient.invalidateQueries({ queryKey: ['project', project.id] });
+      }
+      onClose();
+      if (!isEditMode) {
+        router.push(`/projects/${savedProj.id}`);
+      }
+    },
+    onError: (err: any) => {
+      setErrorMessage(err.response?.data?.message || 'Failed to save project');
+    },
+  });
+
+  const handleCreateGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGroupName.trim()) return;
+    createGroupMutation.mutate({
+      name: newGroupName.trim(),
+      color: newGroupColor,
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,23 +247,30 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
       budgetHours: budgetHours ? parseFloat(budgetHours) : undefined,
       billingMethod,
       billingRate: billingRate ? parseFloat(billingRate) : undefined,
+      groupId: groupId || undefined,
+      ownerId: ownerId || undefined,
+      isStrict,
+      workingDays,
+      hoursPerDay: parseFloat(hoursPerDay) || 8.0,
+      allowClientAccess,
     };
 
-    if (templateProjectId) {
+    if (!isEditMode && templateProjectId) {
       payload.templateProjectId = templateProjectId;
       payload.copyMilestones = copyMilestones;
       payload.copyTasks = copyTasks;
       payload.copyMembers = copyMembers;
+      payload.shiftDates = shiftDates;
     }
 
-    createProjectMutation.mutate(payload);
+    saveProjectMutation.mutate(payload);
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6 overflow-hidden">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-slate-100 overflow-hidden">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex justify-end overflow-hidden animate-in fade-in duration-200">
+      <div className="bg-slate-900 border-l border-slate-800 w-full max-w-2xl h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300 text-slate-100 overflow-hidden">
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 p-6 pb-4 shrink-0">
@@ -160,8 +279,14 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
               <Layers className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-100 text-lg">Add New Project</h3>
-              <p className="text-xs text-slate-400">Configure layout, baseline template, budget, and billing options.</p>
+              <h3 className="font-bold text-slate-100 text-lg">
+                {isEditMode ? 'Edit Project Details' : 'Add New Project'}
+              </h3>
+              <p className="text-xs text-slate-400">
+                {isEditMode
+                  ? `Update settings, group, owner, and budget for ${project?.name || 'project'}`
+                  : 'Configure group, owner, strict schedule, budget, and work calendar.'}
+              </p>
             </div>
           </div>
           <button
@@ -193,70 +318,160 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
               <input
                 type="text"
                 required
-                placeholder="e.g. Standard Implementation Project"
+                placeholder="e.g. Mobile Banking Application"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 placeholder-slate-650 focus:outline-none focus:border-indigo-500 text-xs"
               />
             </div>
 
-            {/* Template Selection Dropdown */}
-            <div className="space-y-2 bg-slate-950/60 border border-slate-850 p-4 rounded-xl">
-              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Copy className="w-3.5 h-3.5 text-indigo-400" />
-                Choose from Projects / Baseline Templates
-              </label>
-              <select
-                value={templateProjectId}
-                onChange={(e) => setTemplateProjectId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 text-xs"
-              >
-                <option value="">None (Start from scratch)</option>
-                {availableProjects.map((p: any) => (
-                  <option key={p.id} value={p.id}>
-                    {p.isTemplate ? `[Template] ${p.name}` : p.name} ({p.projectCode})
-                  </option>
-                ))}
-              </select>
-
-              {/* Copy Options Checkboxes */}
-              {templateProjectId && (
-                <div className="pt-2 border-t border-slate-850/60 space-y-2 animate-in fade-in duration-150">
-                  <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider block">
-                    Template Copy Options:
-                  </span>
-                  <div className="flex flex-wrap gap-4 text-xs font-medium text-slate-300">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={copyMilestones}
-                        onChange={(e) => setCopyMilestones(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
-                      />
-                      <span>Copy Milestones</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={copyTasks}
-                        onChange={(e) => setCopyTasks(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
-                      />
-                      <span>Copy Tasks</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={copyMembers}
-                        onChange={(e) => setCopyMembers(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
-                      />
-                      <span>Copy Team Members</span>
-                    </label>
-                  </div>
+            {/* Project Group & Project Owner Selectors */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              
+              {/* Project Group Selector */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                    <Briefcase className="w-3 h-3 text-indigo-400" /> Project Group
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingGroup(!isCreatingGroup)}
+                    className="text-[10px] text-indigo-400 hover:underline flex items-center gap-0.5"
+                  >
+                    <FolderPlus className="w-3 h-3" /> New Group
+                  </button>
                 </div>
-              )}
+                
+                {isCreatingGroup ? (
+                  <div className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-indigo-500/50">
+                    <input
+                      type="text"
+                      placeholder="Group Name"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      className="flex-1 px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-slate-100 text-xs focus:outline-none"
+                    />
+                    <input
+                      type="color"
+                      value={newGroupColor}
+                      onChange={(e) => setNewGroupColor(e.target.value)}
+                      className="w-7 h-7 rounded bg-transparent border-0 cursor-pointer"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateGroup}
+                      disabled={createGroupMutation.isPending}
+                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[10px] font-semibold cursor-pointer"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={groupId}
+                    onChange={(e) => setGroupId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 focus:outline-none focus:border-indigo-500 text-xs"
+                  >
+                    <option value="">None (Unassigned Group)</option>
+                    {projectGroups.map((g: any) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Project Owner Selector */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                  <UserCheck className="w-3 h-3 text-indigo-400" /> Project Owner
+                </label>
+                <select
+                  value={ownerId}
+                  onChange={(e) => setOwnerId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 focus:outline-none focus:border-indigo-500 text-xs"
+                >
+                  <option value="">Default (Logged-in Creator)</option>
+                  {orgMembers.map((m: any) => (
+                    <option key={m.user.id} value={m.user.id}>
+                      {m.user.firstName} {m.user.lastName} ({m.user.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
             </div>
+
+            {/* Template Selection Dropdown (Only in Create Mode) */}
+            {!isEditMode && (
+              <div className="space-y-2 bg-slate-950/60 border border-slate-850 p-4 rounded-xl">
+                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Copy className="w-3.5 h-3.5 text-indigo-400" />
+                  Choose from Projects / Baseline Templates
+                </label>
+                <select
+                  value={templateProjectId}
+                  onChange={(e) => setTemplateProjectId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-indigo-500 text-xs"
+                >
+                  <option value="">None (Start from scratch)</option>
+                  {availableProjects.map((p: any) => (
+                    <option key={p.id} value={p.id}>
+                      {p.isTemplate ? `[Template] ${p.name}` : p.name} ({p.projectCode})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Copy Options Checkboxes */}
+                {templateProjectId && (
+                  <div className="pt-2 border-t border-slate-850/60 space-y-2 animate-in fade-in duration-150">
+                    <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider block">
+                      Template Copy Options:
+                    </span>
+                    <div className="flex flex-wrap gap-4 text-xs font-medium text-slate-300">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={copyMilestones}
+                          onChange={(e) => setCopyMilestones(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
+                        />
+                        <span>Copy Milestones</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={copyTasks}
+                          onChange={(e) => setCopyTasks(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
+                        />
+                        <span>Copy Tasks</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={copyMembers}
+                          onChange={(e) => setCopyMembers(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
+                        />
+                        <span>Copy Team Members</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer select-none text-amber-300">
+                        <input
+                          type="checkbox"
+                          checked={shiftDates}
+                          onChange={(e) => setShiftDates(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-700 text-amber-500 focus:ring-amber-500 accent-amber-500 cursor-pointer"
+                        />
+                        <span>Smart Shift Dates to Start Date</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-1">
               <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
@@ -293,7 +508,7 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
               </div>
             </div>
 
-            {/* Layout Preference & Tags */}
+            {/* Strict Project Toggle & Layout */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Task Layout</label>
@@ -323,57 +538,141 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
               </div>
             </div>
 
-            {/* Visibility & Mark as Template */}
+            {/* Strict Project & Template Settings */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div className="space-y-2">
-                <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Visibility Setting</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setVisibility('PRIVATE')}
-                    className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
-                      visibility === 'PRIVATE'
-                        ? 'border-indigo-500 bg-indigo-500/10 text-slate-100'
-                        : 'border-slate-850 bg-slate-950/40 text-slate-400 hover:border-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1 font-bold text-xs">
-                      <Lock className="w-3 h-3" /> Private
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setVisibility('ORGANIZATION')}
-                    className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all cursor-pointer ${
-                      visibility === 'ORGANIZATION'
-                        ? 'border-indigo-500 bg-indigo-500/10 text-slate-100'
-                        : 'border-slate-850 bg-slate-950/40 text-slate-400 hover:border-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1 font-bold text-xs">
-                      <Globe className="w-3 h-3" /> Org Public
-                    </div>
-                  </button>
+              <div className="space-y-2 bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="strictCheckbox" className="text-xs font-semibold text-slate-200 flex items-center gap-1.5 cursor-pointer">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Strict Project Schedule
+                  </label>
+                  <input
+                    type="checkbox"
+                    id="strictCheckbox"
+                    checked={isStrict}
+                    onChange={(e) => setIsStrict(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 text-amber-500 focus:ring-amber-500 accent-amber-500 cursor-pointer"
+                  />
                 </div>
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  Enforces strict schedule bounds so tasks & milestones cannot exceed project start/end dates.
+                </p>
               </div>
 
-              <div className="flex items-center gap-3 pt-6">
-                <input
-                  type="checkbox"
-                  id="isTemplateCheckbox"
-                  checked={isTemplate}
-                  onChange={(e) => setIsTemplate(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
-                />
-                <label htmlFor="isTemplateCheckbox" className="text-xs font-semibold text-slate-200 cursor-pointer select-none">
-                  Save as Project Template (Reusable Blueprint)
-                </label>
+              <div className="space-y-2 bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="isTemplateCheckbox" className="text-xs font-semibold text-slate-200 flex items-center gap-1.5 cursor-pointer">
+                    <Copy className="w-3.5 h-3.5 text-indigo-400" /> Reusable Project Template
+                  </label>
+                  <input
+                    type="checkbox"
+                    id="isTemplateCheckbox"
+                    checked={isTemplate}
+                    onChange={(e) => setIsTemplate(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  Saves this project as a baseline blueprint for future project creation.
+                </p>
+              </div>
+            </div>
+
+            {/* Visibility Options */}
+            <div className="space-y-2">
+              <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Visibility Setting</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setVisibility('PRIVATE')}
+                  className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                    visibility === 'PRIVATE'
+                      ? 'border-indigo-500 bg-indigo-500/10 text-slate-100'
+                      : 'border-slate-850 bg-slate-950/40 text-slate-400 hover:border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-bold text-xs">
+                    <Lock className="w-4 h-4 text-indigo-400" /> Private to Members
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVisibility('ORGANIZATION')}
+                  className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                    visibility === 'ORGANIZATION'
+                      ? 'border-indigo-500 bg-indigo-500/10 text-slate-100'
+                      : 'border-slate-850 bg-slate-950/40 text-slate-400 hover:border-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-bold text-xs">
+                    <Globe className="w-4 h-4 text-blue-400" /> Public to Organization
+                  </div>
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Section 2: Budget & Financial Accordion */}
+          {/* Section 2: Work Schedule & Client Access Accordion */}
+          <div className="border border-slate-850 rounded-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setIsScheduleOpen(!isScheduleOpen)}
+              className="w-full px-4 py-3 bg-slate-950 flex items-center justify-between text-xs font-bold text-slate-200 hover:bg-slate-850/60 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-indigo-400" />
+                <span>Work Calendar & Client Access Settings</span>
+              </div>
+              {isScheduleOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+            </button>
+
+            {isScheduleOpen && (
+              <div className="p-4 bg-slate-900/50 space-y-4 border-t border-slate-850">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Working Days</label>
+                    <select
+                      value={workingDays}
+                      onChange={(e) => setWorkingDays(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 focus:outline-none focus:border-indigo-500 text-xs"
+                    >
+                      <option value="1,2,3,4,5">Monday - Friday (5 Days)</option>
+                      <option value="7,1,2,3,4">Sunday - Thursday (5 Days)</option>
+                      <option value="1,2,3,4,5,6">Monday - Saturday (6 Days)</option>
+                      <option value="1,2,3,4,5,6,7">Everyday (7 Days)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Working Hours / Day</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      placeholder="8.0"
+                      value={hoursPerDay}
+                      onChange={(e) => setHoursPerDay(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 focus:outline-none focus:border-indigo-500 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-850/60 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-semibold text-slate-200 block">Allow Client Portal Access</span>
+                    <span className="text-[10px] text-slate-400 block">External client users can log in to view progress & milestones.</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={allowClientAccess}
+                    onChange={(e) => setAllowClientAccess(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Budget & Financial Accordion */}
           <div className="border border-slate-850 rounded-xl overflow-hidden">
             <button
               type="button"
@@ -501,11 +800,16 @@ export default function CreateProjectModal({ isOpen, onClose }: CreateProjectMod
             </button>
             <button
               type="submit"
-              disabled={createProjectMutation.isPending}
+              disabled={saveProjectMutation.isPending}
               className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl font-semibold shadow-lg text-xs active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
             >
-              {createProjectMutation.isPending ? (
+              {saveProjectMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isEditMode ? (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>Save Changes</span>
+                </>
               ) : (
                 <>
                   <Plus className="w-4 h-4" />

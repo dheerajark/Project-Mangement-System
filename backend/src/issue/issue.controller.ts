@@ -10,7 +10,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { IssueService } from './issue.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
@@ -20,7 +25,12 @@ import { Permissions } from '../auth/decorators/permissions.decorator';
 import { GetCurrentUserId } from '../auth/decorators/get-current-user-id.decorator';
 import { GetCurrentUser } from '../auth/decorators/get-current-user.decorator';
 import { TenantId } from '../auth/decorators/tenant-id.decorator';
-import { IssueStatus, IssuePriority, IssueSeverity, IssueType } from '@prisma/client';
+import {
+  IssueStatus,
+  IssuePriority,
+  IssueSeverity,
+  IssueType,
+} from '@prisma/client';
 
 @ApiTags('Issues')
 @ApiBearerAuth()
@@ -107,10 +117,7 @@ export class IssueController {
   @Get('issues/assigned')
   @Permissions('VIEW_ISSUE')
   @ApiOperation({ summary: 'Get all issues assigned to the logged-in user' })
-  findAssigned(
-    @TenantId() orgId: string,
-    @GetCurrentUserId() userId: string,
-  ) {
+  findAssigned(@TenantId() orgId: string, @GetCurrentUserId() userId: string) {
     return this.issueService.getAssignedIssues(orgId, userId);
   }
 
@@ -118,10 +125,7 @@ export class IssueController {
   @Get('issues/:id')
   @Permissions('VIEW_ISSUE')
   @ApiOperation({ summary: 'Get detailed view of an issue' })
-  getIssueById(
-    @Param('id') issueId: string,
-    @TenantId() orgId: string,
-  ) {
+  getIssueById(@Param('id') issueId: string, @TenantId() orgId: string) {
     return this.issueService.getIssueById(orgId, issueId);
   }
 

@@ -8,7 +8,7 @@ export class CustomLogger implements LoggerService {
 
   constructor() {
     const isProd = process.env.NODE_ENV === 'production';
-    
+
     const transports: winston.transport[] = [
       new winston.transports.Console({
         format: isProd
@@ -19,9 +19,11 @@ export class CustomLogger implements LoggerService {
           : winston.format.combine(
               winston.format.colorize(),
               winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-              winston.format.printf(({ timestamp, level, message, context }) => {
-                return `[Nest] - ${timestamp}   ${level} [${context || 'System'}] ${message}`;
-              }),
+              winston.format.printf(
+                ({ timestamp, level, message, context }) => {
+                  return `[Nest] - ${timestamp}   ${level} [${context || 'System'}] ${message}`;
+                },
+              ),
             ),
       }),
     ];

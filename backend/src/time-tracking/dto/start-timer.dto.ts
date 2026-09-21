@@ -7,7 +7,10 @@ export class StartTimerDto {
   @IsNotEmpty()
   projectId: string;
 
-  @ApiPropertyOptional({ example: 'task-uuid-here', description: 'The task ID' })
+  @ApiPropertyOptional({
+    example: 'task-uuid-here',
+    description: 'The task ID',
+  })
   @IsOptional()
   @IsString()
   taskId?: string;

@@ -1,4 +1,11 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -8,7 +15,12 @@ import { Public } from './decorators/public.decorator';
 import { RefreshTokenGuard } from './guards/refreshToken.guard';
 import { GetCurrentUserId } from './decorators/get-current-user-id.decorator';
 import { GetCurrentUser } from './decorators/get-current-user.decorator';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -29,8 +41,14 @@ export class AuthController {
   @Post('accept-invite')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Accept an invitation and register' })
-  @ApiResponse({ status: 200, description: 'User successfully registered via invitation.' })
-  @ApiResponse({ status: 403, description: 'Invalid or expired invitation token.' })
+  @ApiResponse({
+    status: 200,
+    description: 'User successfully registered via invitation.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Invalid or expired invitation token.',
+  })
   acceptInvitation(@Body() dto: AcceptInviteDto): Promise<Tokens> {
     return this.authService.acceptInvitation(dto);
   }

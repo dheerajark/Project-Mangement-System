@@ -1,15 +1,31 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { OrganizationService } from './organization.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { CloneProfileDto } from './dto/clone-profile.dto';
 import { AssignProfileDto } from './dto/assign-profile.dto';
+import { CreateRoleDto } from './dto/create-role.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
 import { TenantId } from '../auth/decorators/tenant-id.decorator';
 import { GetCurrentUserId } from '../auth/decorators/get-current-user-id.decorator';
 import { Permissions } from '../auth/decorators/permissions.decorator';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 
 @ApiTags('Organization')
 @ApiBearerAuth()
@@ -19,7 +35,10 @@ export class OrganizationController {
 
   @Get('settings')
   @ApiOperation({ summary: 'Get organization settings' })
-  @ApiResponse({ status: 200, description: 'Organization settings retrieved successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Organization settings retrieved successfully.',
+  })
   getSettings(@TenantId() organizationId: string) {
     return this.organizationService.getSettings(organizationId);
   }
@@ -28,7 +47,10 @@ export class OrganizationController {
   @UseGuards(PermissionsGuard)
   @Permissions('MANAGE_USERS')
   @ApiOperation({ summary: 'Update organization settings' })
-  @ApiResponse({ status: 200, description: 'Organization settings updated successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Organization settings updated successfully.',
+  })
   updateSettings(
     @TenantId() organizationId: string,
     @GetCurrentUserId() userId: string,
@@ -39,7 +61,10 @@ export class OrganizationController {
 
   @Get('members')
   @ApiOperation({ summary: 'Get list of organization members' })
-  @ApiResponse({ status: 200, description: 'List of members retrieved successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of members retrieved successfully.',
+  })
   getMembers(@TenantId() organizationId: string) {
     return this.organizationService.getMembers(organizationId);
   }
@@ -55,7 +80,12 @@ export class OrganizationController {
     @Param('userId') targetUserId: string,
     @Body() dto: UpdateMemberDto,
   ) {
-    return this.organizationService.updateMember(organizationId, currentUserId, targetUserId, dto);
+    return this.organizationService.updateMember(
+      organizationId,
+      currentUserId,
+      targetUserId,
+      dto,
+    );
   }
 
   @Delete('members/:userId')
@@ -68,23 +98,64 @@ export class OrganizationController {
     @GetCurrentUserId() currentUserId: string,
     @Param('userId') targetUserId: string,
   ) {
-    return this.organizationService.deleteMember(organizationId, currentUserId, targetUserId);
+    return this.organizationService.deleteMember(
+      organizationId,
+      currentUserId,
+      targetUserId,
+    );
   }
 
   @Get('audit-logs')
   @UseGuards(PermissionsGuard)
   @Permissions('MANAGE_USERS')
   @ApiOperation({ summary: 'Get audit logs for the organization' })
-  @ApiResponse({ status: 200, description: 'Audit logs retrieved successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Audit logs retrieved successfully.',
+  })
   getAuditLogs(@TenantId() organizationId: string) {
     return this.organizationService.getAuditLogs(organizationId);
   }
 
   @Get('roles')
   @ApiOperation({ summary: 'Get list of available roles' })
-  @ApiResponse({ status: 200, description: 'List of roles retrieved successfully.' })
-  getRoles() {
-    return this.organizationService.getRoles();
+  @ApiResponse({
+    status: 200,
+    description: 'List of roles retrieved successfully.',
+  })
+  getRoles(@TenantId() organizationId: string) {
+    return this.organizationService.getRoles(organizationId);
+  }
+
+  @Post('roles')
+  @UseGuards(PermissionsGuard)
+  @Permissions('MANAGE_USERS')
+  @ApiOperation({ summary: 'Create custom role' })
+  @ApiResponse({ status: 201, description: 'Role created successfully.' })
+  createRole(@TenantId() organizationId: string, @Body() dto: CreateRoleDto) {
+    return this.organizationService.createRole(organizationId, dto);
+  }
+
+  @Patch('roles/:id')
+  @UseGuards(PermissionsGuard)
+  @Permissions('MANAGE_USERS')
+  @ApiOperation({ summary: 'Update custom role' })
+  @ApiResponse({ status: 200, description: 'Role updated successfully.' })
+  updateRole(
+    @TenantId() organizationId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateRoleDto,
+  ) {
+    return this.organizationService.updateRole(organizationId, id, dto);
+  }
+
+  @Delete('roles/:id')
+  @UseGuards(PermissionsGuard)
+  @Permissions('MANAGE_USERS')
+  @ApiOperation({ summary: 'Delete custom role' })
+  @ApiResponse({ status: 200, description: 'Role deleted successfully.' })
+  deleteRole(@TenantId() organizationId: string, @Param('id') id: string) {
+    return this.organizationService.deleteRole(organizationId, id);
   }
 
   // ─── Profiles & Permissions Endpoints ───────────────────────────────────────
@@ -93,7 +164,10 @@ export class OrganizationController {
   @UseGuards(PermissionsGuard)
   @Permissions('MANAGE_USERS')
   @ApiOperation({ summary: 'Get all system permissions' })
-  @ApiResponse({ status: 200, description: 'Permissions retrieved successfully.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Permissions retrieved successfully.',
+  })
   getAllPermissions() {
     return this.organizationService.getAllPermissions();
   }
@@ -117,7 +191,11 @@ export class OrganizationController {
     @GetCurrentUserId() userId: string,
     @Body() dto: CreateProfileDto,
   ) {
-    return this.organizationService.createCustomProfile(organizationId, userId, dto);
+    return this.organizationService.createCustomProfile(
+      organizationId,
+      userId,
+      dto,
+    );
   }
 
   @Post('profiles/:id/archive')
@@ -144,7 +222,12 @@ export class OrganizationController {
     @Param('profileId') profileId: string,
     @Body() dto: CloneProfileDto,
   ) {
-    return this.organizationService.cloneProfile(organizationId, userId, profileId, dto);
+    return this.organizationService.cloneProfile(
+      organizationId,
+      userId,
+      profileId,
+      dto,
+    );
   }
 
   @Post('profiles/:profileId/permissions/:permissionId')
@@ -158,7 +241,12 @@ export class OrganizationController {
     @Param('profileId') profileId: string,
     @Param('permissionId') permissionId: string,
   ) {
-    return this.organizationService.addPermissionToProfile(organizationId, userId, profileId, permissionId);
+    return this.organizationService.addPermissionToProfile(
+      organizationId,
+      userId,
+      profileId,
+      permissionId,
+    );
   }
 
   @Delete('profiles/:profileId/permissions/:permissionId')
@@ -172,7 +260,12 @@ export class OrganizationController {
     @Param('profileId') profileId: string,
     @Param('permissionId') permissionId: string,
   ) {
-    return this.organizationService.removePermissionFromProfile(organizationId, userId, profileId, permissionId);
+    return this.organizationService.removePermissionFromProfile(
+      organizationId,
+      userId,
+      profileId,
+      permissionId,
+    );
   }
 
   @Patch('members/:memberId/profile')
@@ -186,6 +279,11 @@ export class OrganizationController {
     @Param('memberId') targetUserId: string,
     @Body() dto: AssignProfileDto,
   ) {
-    return this.organizationService.assignProfileToMember(organizationId, userId, targetUserId, dto);
+    return this.organizationService.assignProfileToMember(
+      organizationId,
+      userId,
+      targetUserId,
+      dto,
+    );
   }
 }

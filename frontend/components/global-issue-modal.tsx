@@ -130,10 +130,10 @@ export default function GlobalIssueModal({ isOpen, onClose, onSuccess }: GlobalI
   const projectMembers = projectDetails?.members || [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex justify-end overflow-hidden animate-in fade-in duration-200">
       <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} />
 
-      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden text-slate-100 p-6 space-y-4 max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-xl bg-slate-900 border-l border-slate-800 shadow-2xl overflow-hidden text-slate-100 p-6 space-y-4 h-full flex flex-col animate-in slide-in-from-right duration-300">
         <header className="flex justify-between items-center border-b border-slate-800 pb-3 flex-shrink-0">
           <h4 className="font-bold text-sm text-slate-100 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-400" />
@@ -144,174 +144,176 @@ export default function GlobalIssueModal({ isOpen, onClose, onSuccess }: GlobalI
           </button>
         </header>
 
-        <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto pr-1 flex-1 scrollbar-thin">
-          {/* Project Selection */}
-          <div className="space-y-1">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Project *
-            </label>
-            {isLoadingProjects ? (
-              <div className="flex items-center gap-2 py-2 text-xs text-slate-500">
-                <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                <span>Loading projects...</span>
-              </div>
-            ) : (
-              <select
-                required
-                value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-              >
-                <option value="">Select Project</option>
-                {activeProjects.map((p: any) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.projectCode})
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Issue Title */}
-          <div className="space-y-1">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Issue Title *
-            </label>
-            <input
-              type="text"
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Server crash on login failure"
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Description */}
-          <div className="space-y-1">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Description
-            </label>
-            <textarea
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the issue context..."
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 resize-none"
-            />
-          </div>
-
-          {/* Type */}
-          <div className="space-y-1">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Issue Type
-            </label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as any)}
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-            >
-              <option value="BUG">Bug</option>
-              <option value="FEATURE_REQUEST">Feature Request</option>
-              <option value="IMPROVEMENT">Improvement</option>
-              <option value="SUPPORT">Support</option>
-            </select>
-          </div>
-
-          {/* Priority & Severity */}
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          {/* Scrollable Form Body */}
+          <div className="p-6 space-y-4 overflow-y-auto flex-1 scrollbar-thin">
+            {/* Project Selection */}
             <div className="space-y-1">
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Priority
+                Project *
               </label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as any)}
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-              >
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-                <option value="CRITICAL">Critical</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Severity
-              </label>
-              <select
-                value={severity}
-                onChange={(e) => setSeverity(e.target.value as any)}
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-              >
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-                <option value="CRITICAL">Critical</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Environment */}
-          <div className="space-y-1">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Environment / OS
-            </label>
-            <input
-              type="text"
-              value={environment}
-              onChange={(e) => setEnvironment(e.target.value)}
-              placeholder="e.g. Chrome, macOS, Production"
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Reproduction Steps */}
-          <div className="space-y-1">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Reproduction Steps
-            </label>
-            <textarea
-              rows={2}
-              value={reproductionSteps}
-              onChange={(e) => setReproductionSteps(e.target.value)}
-              placeholder="1. Go to page X... 2. Click button Y..."
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 resize-none"
-            />
-          </div>
-
-          {/* Assignee & Linked Task */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Assignee
-              </label>
-              {isLoadingProjectDetails ? (
-                <div className="text-[10px] text-slate-550 py-2">Loading members...</div>
+              {isLoadingProjects ? (
+                <div className="flex items-center gap-2 py-2 text-xs text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                  <span>Loading projects...</span>
+                </div>
               ) : (
                 <select
-                  value={assigneeId}
-                  onChange={(e) => setAssigneeId(e.target.value)}
-                  disabled={!selectedProjectId}
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  required
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="">Unassigned</option>
-                  {projectMembers.map((m: any) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.user.firstName ? `${m.user.firstName} ${m.user.lastName || ''}` : m.user.email}
+                  <option value="">Select Project</option>
+                  {activeProjects.map((p: any) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.projectCode})
                     </option>
                   ))}
                 </select>
               )}
             </div>
 
+            {/* Issue Title */}
             <div className="space-y-1">
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Link to Task
+                Issue Title *
+              </label>
+              <input
+                type="text"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="E.g., Production API returns 500 error on payment webhook"
+                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Description
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                placeholder="Detailed explanation, impact analysis, or expected vs actual behavior..."
+                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 resize-none"
+              />
+            </div>
+
+            {/* Type & Priority */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Type
+                </label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="BUG">Bug</option>
+                  <option value="FEATURE_REQUEST">Feature Request</option>
+                  <option value="IMPROVEMENT">Improvement</option>
+                  <option value="SUPPORT">Support</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Priority
+                </label>
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="LOW">Low</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option>
+                  <option value="CRITICAL">Critical</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Severity & Assignee */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Severity
+                </label>
+                <select
+                  value={severity}
+                  onChange={(e) => setSeverity(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="LOW">Low</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option>
+                  <option value="CRITICAL">Critical</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Assignee
+                </label>
+                <select
+                  value={assigneeId}
+                  onChange={(e) => setAssigneeId(e.target.value)}
+                  disabled={!selectedProjectId || isLoadingProjectDetails}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">Unassigned</option>
+                  {projectMembers.map((m: any) => (
+                    <option key={m.user.id} value={m.user.id}>
+                      {m.user.firstName ? `${m.user.firstName} ${m.user.lastName || ''}` : m.user.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Environment */}
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Environment
+              </label>
+              <input
+                type="text"
+                value={environment}
+                onChange={(e) => setEnvironment(e.target.value)}
+                placeholder="E.g., Production, Staging, Safari 17, iOS 17.2"
+                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            {/* Steps to Reproduce */}
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Steps to Reproduce
+              </label>
+              <textarea
+                value={reproductionSteps}
+                onChange={(e) => setReproductionSteps(e.target.value)}
+                rows={3}
+                placeholder="1. Go to checkout page&#10;2. Enter valid card detail&#10;3. Click pay now button"
+                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-100 text-xs focus:outline-none focus:border-indigo-500 resize-none font-mono text-[11px]"
+              />
+            </div>
+
+            {/* Linked Task */}
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Linked Task (Optional)
               </label>
               {isLoadingTasks ? (
-                <div className="text-[10px] text-slate-550 py-2">Loading tasks...</div>
+                <div className="flex items-center gap-2 py-2 text-xs text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                  <span>Loading project tasks...</span>
+                </div>
               ) : (
                 <select
                   value={taskId}
@@ -330,19 +332,19 @@ export default function GlobalIssueModal({ isOpen, onClose, onSuccess }: GlobalI
             </div>
           </div>
 
-          {/* Modal Footer */}
-          <div className="flex justify-end gap-3 pt-3 border-t border-slate-800 flex-shrink-0">
+          {/* Fixed Footer at drawer bottom */}
+          <div className="flex justify-end gap-3 p-6 pt-4 border-t border-slate-800 bg-slate-950/60 shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 bg-slate-950 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs font-semibold text-slate-400 transition-colors"
+              className="px-4 py-2.5 bg-slate-950 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs font-semibold text-slate-400 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={reportIssueMutation.isPending}
-              className="px-4.5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-1.5"
+              className="px-4.5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-indigo-500/20"
             >
               {reportIssueMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Report Issue
